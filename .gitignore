@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+test/sink-data/
+test/sink.log
+*.tar.gz
+.DS_Store

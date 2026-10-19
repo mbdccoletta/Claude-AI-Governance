@@ -1,0 +1,158 @@
+
+### sink: starting on 127.0.0.1:9999
+sink ok
+
+### install.sh against the sink (dummy token, prompts OFF, native OTel env ON)
+Dynatrace AI Observability for Claude — installer (darwin/arm64)
+
+[1;33mwarning:[0m plain http:// endpoint — only use this for local testing
+[1;34m==>[0m Stopped the previous collector service (re-install)
+[1;34m==>[0m Installing Claude Code hook → ~/.claude/otel-hook.py
+PreToolUse: hook already present, left untouched
+PostToolUse: hook already present, left untouched
+UserPromptSubmit: hook already present, left untouched
+Stop: hook already present, left untouched
+settings.json unchanged
+[1;34m==>[0m Writing ~/.claude/otel-attrs.json
+written: ~/.claude/otel-attrs.json
+[1;34m==>[0m Extracting collector from <scratchpad>/otelcol-dl/otelcol-contrib_0.163.1_darwin_arm64.tar.gz
+[1;34m==>[0m checksum OK
+[1;34m==>[0m Collector: otelcol-contrib version 0.163.1
+[1;34m==>[0m Storing the token in the macOS Keychain (service: dt-ai-obs-claude)
+[1;34m==>[0m Rendering ~/.dt-ai-obs/otel-collector.yaml
+rendered ~/.dt-ai-obs/otel-collector.yaml
+[1;34m==>[0m Enabling Claude Code native OTel export → http://127.0.0.1:4318 (env block in settings.json)
+settings.json unchanged
+[1;34m==>[0m Registering launchd agent com.dynatrace.dt-ai-obs-claude
+[1;34m==>[0m Waiting for the collector health check on 127.0.0.1:13133
+[1;34m==>[0m Collector is up: {"status":"Server available","upSince":"2026-10-19T16:57:11.607594-03:00","uptime":"354.205125ms"}
+
+Done.
+  OTLP endpoint (tenant) : http://127.0.0.1:9999/api/v2/otlp
+  Local collector        : http://127.0.0.1:4318  (health: http://127.0.0.1:13133)
+  Token storage          : keychain
+  Hook                   : ~/.claude/otel-hook.py (PreToolUse, PostToolUse, UserPromptSubmit, Stop)
+  Attributes             : ~/.claude/otel-attrs.json
+  Collector config/logs  : ~/.dt-ai-obs/otel-collector.yaml, ~/.dt-ai-obs/logs/collector.log
+  Prompt capture         : off
+  Native Claude OTel     : on (settings.json env)
+
+Next steps:
+  • Restart open Claude Code sessions (Desktop Code tab and CLI) so the hooks load.
+  • Import Dashboard/Developers AI Usage.json in the tenant (Dashboards → Upload).
+  • Service control:
+  launchctl kickstart -k gui/501/com.dynatrace.dt-ai-obs-claude   # restart
+  launchctl bootout gui/501/com.dynatrace.dt-ai-obs-claude        # stop
+
+### health: {"status":"Server available","upSince":"2026-10-19T16:57:11.607594-03:00","uptime":"382.229334ms"}
+
+### hook status
+PreToolUse:       otel-hook.py
+PostToolUse:      otel-hook.py
+UserPromptSubmit: otel-hook.py
+Stop:             otel-hook.py
+native OTel env: on (http://127.0.0.1:4318)
+otel-attrs.json: {"os.type": "macos", "squad": "platform", "cost_center": "cc-1234", "_capture_prompts": "false", "_collector_port": "4318"}
+
+### firing synthetic hook events — Desktop Code tab session (CLAUDE_CODE_ENTRYPOINT=claude-desktop)
+  hook exit=0 ({"hook_event_name":"UserPromptSubmit","session_id":"e2e-desk...)
+  hook exit=0 ({"hook_event_name":"PreToolUse","session_id":"e2e-desktop-00...)
+  hook exit=0 ({"hook_event_name":"PostToolUse","session_id":"e2e-desktop-0...)
+  hook exit=0 ({"hook_event_name":"Stop","session_id":"e2e-desktop-0001","c...)
+
+### firing synthetic hook events — plain CLI session
+  hook exit=0 ({"hook_event_name":"UserPromptSubmit","session_id":"e2e-cli-...)
+  hook exit=0 ({"hook_event_name":"PreToolUse","session_id":"e2e-cli-0002",...)
+  hook exit=0 ({"hook_event_name":"PostToolUse","session_id":"e2e-cli-0002"...)
+  hook exit=0 ({"hook_event_name":"Stop","session_id":"e2e-cli-0002","cost_...)
+
+### native Claude Code OTel: running 'claude -p' with telemetry pointed at the collector
+using ~/Library/Application Support/Claude/claude-code/2.1.299/4fa9694b7975/claude.app/Contents/MacOS/claude
+Failed to authenticate: OAuth session expired and could not be refreshed
+claude -p failed (exit 1)
+
+### waiting 20s for the collector batch (5s) to flush to the sink
+
+### sink received
+sink listening on http://127.0.0.1:9999, storing bodies in ~/projects/dt-ai-observability-claude/test/sink-data
+{"ts": "16:57:16", "n": 1, "path": "/api/v2/otlp/v1/traces", "content_type": "application/x-protobuf", "wire_bytes": 794, "bytes": 2752, "auth": "present (Api-Token ...)", "contains": ["claude-code-desktop", "claude-code", "claude-code-hooks", "gen_ai.request.model", "gen_ai.provider.name", "gen_ai.usage.input_tokens", "claude.tool_name", "user.email", "squad", "cost_center", "os.type"], "file": "0001_api_v2_otlp_v1_traces.bin"}
+{"ts": "16:57:21", "n": 2, "path": "/api/v2/otlp/v1/metrics", "content_type": "application/x-protobuf", "wire_bytes": 721, "bytes": 1596, "auth": "present (Api-Token ...)", "contains": ["claude-code", "user.email", "squad", "cost_center", "os.type", "terminal.type"], "file": "0002_api_v2_otlp_v1_metrics.bin"}
+{"ts": "16:57:21", "n": 3, "path": "/api/v2/otlp/v1/logs", "content_type": "application/x-protobuf", "wire_bytes": 1933, "bytes": 10728, "auth": "present (Api-Token ...)", "contains": ["claude-code", "user.email", "squad", "cost_center", "os.type", "user_prompt", "terminal.type"], "file": "0003_api_v2_otlp_v1_logs.bin"}
+
+### sink summary (requests per path)
+   1 "path": "/api/v2/otlp/v1/logs"
+   1 "path": "/api/v2/otlp/v1/metrics"
+   1 "path": "/api/v2/otlp/v1/traces"
+
+### privacy check: synthetic prompt text must not appear in any payload
+OK: no prompt content in payloads
+
+### payload checks (substring search in the decoded protobuf bodies)
+  traces: service.name claude-code-desktop (Desktop Code tab) OK (4 file(s))
+  traces: gen_ai.provider.name alias added by the collector  OK (4 file(s))
+  traces: gen_ai.usage.input_tokens from the session transcript OK (2 file(s))
+  traces: configured user.email (test@example.com)           OK (4 file(s))
+  traces: custom attribute cost_center                       OK (8 file(s))
+  metrics: claude_code.* counters (native OTel)              OK (2 file(s))
+  logs: claude_code events (native OTel)                     OK (15 file(s))
+  logs: account e-mail moved to claude.account_email         OK (13 file(s))
+  logs: configured user.email (test@example.com)             OK (2 file(s))
+
+### collector log (tail, truncated lines)
+2026-10-19T16:57:21.609-0300	info	ResourceMetrics #0 host.arch=arm64 os.type=macos os.version=25.6.0 service.name=claude-code service.version=2.1.299 user.email=test@example.com deployment.environment=demo squad=platform
+ScopeMetrics #0 com.anthropic.claude_code@2.1.299
+claude_code.session.count{user.id=REDACTED_USER_ID,session.id=REDACTED_SESSION_ID,organization.id=REDACTED_ORG_ID,claude.account_email
+ResourceMetrics #1 host.arch=arm64 os.type=macos os.version=25.6.0 service.name=claude-code service.version=2.1.299 user.email=test@example.com deployment.environment=demo squad=platform cost_center=cc-1234
+ScopeMetrics #0 com.anthropic.claude_code@2.1.299
+claude_code.active_time.total{user.id=REDACTED_USER_ID,session.id=REDACTED_SESSION_ID,organization.id=REDACTED_ORG_ID,claude.account_e
+	{"resource": {"service.instance.id": "78501334-b554-48a3-bc43-521f552ba759", "service.name": "otelcol-contrib", "service.version": "0.163.1"}, "otelcol.component.id": "debug", "otelcol.component.kind": "exporter", "otel
+2026-10-19T16:57:21.609-0300	info	ResourceLog #0 host.arch=arm64 os.type=macos os.version=25.6.0 service.name=claude-code service.version=2.1.299 user.email=test@example.com deployment.environment=demo squad=platform cos
+ScopeLog #0 com.anthropic.claude_code.events@2.1.299
+claude_code.managed_settings_resolved user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.a
+claude_code.hook_registered user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_ema
+claude_code.hook_registered user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_ema
+claude_code.hook_registered user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_ema
+claude_code.hook_registered user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_ema
+claude_code.plugin_loaded user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_email
+claude_code.plugin_loaded user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_email
+claude_code.plugin_loaded user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_email
+claude_code.plugin_loaded user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_email
+ResourceLog #1 host.arch=arm64 os.type=macos os.version=25.6.0 service.name=claude-code service.version=2.1.299 user.email=test@example.com deployment.environment=demo squad=platform cost_center=cc-1234
+ScopeLog #0 com.anthropic.claude_code.events@2.1.299
+claude_code.user_prompt user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_email=REDACTED
+claude_code.hook_execution_start user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.accoun
+claude_code.hook_execution_complete user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.acc
+claude_code.api_error user.id=REDACTED_USER_ID session.id=REDACTED_SESSION_ID organization.id=REDACTED_ORG_ID claude.account_email=REDACTED
+	{"resource": {"service.instance.id": "78501334-b554-48a3-bc43-521f552ba759", "service.name": "otelcol-contrib", "service.version": "0.163.1"}, "otelcol.component.id": "debug", "otelcol.component.kind": "exporter", "otel
+
+### uninstall.sh --yes
+[1;34m==>[0m Stopping launchd agent com.dynatrace.dt-ai-obs-claude
+[1;34m==>[0m Removing the Keychain item (dt-ai-obs-claude)
+[1;34m==>[0m Removing Claude Code hook entries and files
+PreToolUse: removed 1 hook entry
+PostToolUse: removed 1 hook entry
+UserPromptSubmit: removed 1 hook entry
+Stop: removed 1 hook entry
+backup: ~/.claude/settings.json.bak-20261019-165740
+written: ~/.claude/settings.json
+env.CLAUDE_CODE_ENABLE_TELEMETRY removed
+env.OTEL_METRICS_EXPORTER removed
+env.OTEL_LOGS_EXPORTER removed
+env.OTEL_EXPORTER_OTLP_PROTOCOL removed
+env.OTEL_EXPORTER_OTLP_ENDPOINT removed
+env.OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE removed
+env.OTEL_METRIC_EXPORT_INTERVAL removed
+env.OTEL_LOGS_EXPORT_INTERVAL removed
+backup: ~/.claude/settings.json.bak-20261019-165740
+written: ~/.claude/settings.json
+[1;34m==>[0m Removing ~/.dt-ai-obs
+Done. Restart open Claude Code sessions so the removed hooks stop loading.
+
+### post-uninstall check
+ls: ~/.dt-ai-obs: No such file or directory
+
+### post-uninstall state (checked separately after the run)
+  removed: ~/.dt-ai-obs, LaunchAgent plist, Keychain item, ~/.claude/otel-hook.py, otel-attrs.json, otel-state
+  settings.json keys: agentPushNotifEnabled, enabledPlugins, extraKnownMarketplaces, model (no hooks, no env)
+  no process listening on 4318 / 13133
+### done

@@ -1,0 +1,17 @@
+// Tokens by product and model, last 30 days, split by token type (dedup applied).
+// product is the normalised enum (chat|claude_code|cowork|design|api|other); product.raw keeps Anthropic's value.
+fetch bizevents, from: now() - 45d
+| filter event.type == "claude.usage.daily"
+| filter usage.date >= formatTimestamp(now() - 30d, format: "yyyy-MM-dd")
+| dedup dedup.key, sort: {timestamp desc}
+| summarize {
+    input = sum(tokens.input),
+    output = sum(tokens.output),
+    cache_read = sum(tokens.cache_read),
+    cache_creation = sum(tokens.cache_creation),
+    total = sum(tokens.total),
+    cost_usd = sum(cost_usd),
+    developers = countDistinct(user.email)
+  }, by: {product, model}
+| fieldsAdd cache_hit_pct = if(total > 0, cache_read * 100.0 / total, else: 0)
+| sort total desc

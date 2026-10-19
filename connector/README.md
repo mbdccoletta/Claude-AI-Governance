@@ -1,0 +1,162 @@
+# Connector — layer 3: official daily Claude usage & cost per developer
+
+Layers 1 and 2 of dt-ai-observability-claude see what happens on instrumented machines in real time (Claude Code hooks → spans,
+Claude Code native OTel metrics/logs). They cannot see claude.ai chat, Cowork, Design, Claude Code on the web, or any
+developer who did not install the hooks. **Layer 3 is the official, billing-grade source**: once a day it imports
+Anthropic's own per-user usage and cost figures into Grail as business events (`event.type = "claude.usage.daily"`, one
+event per user × product × model × UTC day × source). Prompts and content are never collected.
+
+```
+connector/
+├── schema.md                      bizevent schema, product mapping, dedup rules
+├── workflow/
+│   ├── claude-usage-connector.json   importable workflow (generated — do not edit by hand)
+│   ├── build.py                      tasks/ + lib/common.js  →  JSON + build/*.js
+│   ├── lib/common.js                 shared: Anthropic client (rate limit, backoff, cursor rules), event builder, ingest batching
+│   └── tasks/                        resolve_config · enterprise_analytics · console_claude_code · team_reminder
+├── csv-import/                    import_team_spend.py (+ sample.csv) for Claude Team plans
+├── dql/                           4 ready queries (cost/dev, tokens by product+model, top 10, official vs observed)
+├── dashboard/                     claude-usage-dashboard.json (dtctl) · .upload.json (Dashboards app) · build.py
+├── deploy/                        deploy.sh (dtctl, end to end) · vault_upsert.js · render_workflow.py · merge_allowlist.py
+├── skills/deploy-claude-usage-connector/SKILL.md   Claude skill: deploy + operate with dtctl
+└── test/                          mock_server.py (Anthropic + bizevents sink) · run_tests.sh · test.log · Node SDK shims
+```
+
+## Installation at a glance
+
+![Installation process](docs/installation-process.svg)
+
+Tenant prerequisites once (AI Obs app, ingest token, Anthropic key in the vault), then `install.sh` on each developer machine (layers 1+2)
+and `deploy/deploy.sh` once per tenant (layer 3). Amber steps are the only manual ones and always involve a secret the operator pastes.
+
+## Which organization type needs which key
+
+| Your Claude org | `org_type` | Credential | Where to create it | API used | Per-user? |
+|---|---|---|---|---|---|
+| **Claude Enterprise** (claude.ai, usage-based plan) | `enterprise` | **Analytics API key** (scope `read:analytics`) | claude.ai → Organization settings → API. Only the **primary owner** can enable API access and create it. | `GET /v1/organizations/analytics/user_cost_report` and `user_usage_report` (`bucket_width=1d`, `group_by[]=product,model`, `limit=1000`) | yes — chat, claude_code, cowork, design, … |
+| **Claude Console / Claude Platform** (API orgs) | `console` | **Admin API key** `sk-ant-admin01-…` | platform.claude.com/settings/admin-keys (organization admin) | `GET /v1/organizations/usage_report/claude_code` (per user/API key, per day) and optionally `usage_report/messages` grouped by model + workspace (org-level, `product=api`) | yes for Claude Code; API usage is org/workspace level |
+| **Claude Team** | `team` | none | claude.ai → Settings → Analytics → **export spend CSV** (≤ 90 days, daily refresh, 1-day lag) | none — run `csv-import/import_team_spend.py` | yes (from the CSV) |
+
+The two key types are not interchangeable: an Admin key cannot call the Enterprise Analytics API and vice-versa.
+Seat-based Enterprise plans get usage credits only in the cost endpoints, not dollars.
+
+## Setup
+
+### 1. Credential vault
+Create a **Token** credential (Settings → Credential vault → Add new credential) holding the Analytics or Admin key, named
+`Anthropic enterprise usage API key` or `Anthropic console usage API key` (or any name you then pass as workflow input `credential_name`),
+with Credential scope **AppEngine**, **Allow access without app context (Workflows)** ON and **Owner access only** ON (owner = workflow owner).
+The workflow looks the entry up by name at run time, so no id is needed; `credential_id` still works if you prefer it.
+
+### 2. Outbound allowlist
+Workflow tasks may only call allow-listed hosts. Add `api.anthropic.com` to
+`builtin:dt-javascript-runtime.allowed-outbound-connections` (Settings → Preferences → Allowed outbound connections).
+Relative `/platform/...` calls (bizevent ingest) need nothing.
+
+### 3. Workflow
+Import `workflow/claude-usage-connector.json` (Workflows app → Upload, or `dtctl apply -f workflow/claude-usage-connector.json --write-id`)
+and set the workflow **inputs**:
+
+| Input | Meaning | Default |
+|---|---|---|
+| `org_type` | `enterprise` \| `console` \| `team` — gates which task runs | `enterprise` |
+| `credential_id` | vault entry with the Anthropic key | — (required unless team) |
+| `org_id` | label copied to `org.id` | empty |
+| `enterprise_lookback_days` | re-read window (revisions) | 10 |
+| `console_lookback_days` | days re-read for Console | 3 |
+| `console_include_api_usage` | also import org-level API usage as `product=api` | true |
+| `dry_run` | build events, log counts, ingest nothing | false |
+
+Schedule: **daily 15:00 UTC** (Enterprise data for day D is normally complete by 13:00–13:30 UTC on D+1).
+The four tasks are `resolve_config` → (`enterprise_analytics` | `console_claude_code` | `team_reminder`), each gated by
+`result("resolve_config").org_type`. Each task stays within the 120 s runtime limit: ≥ 1.1 s between Anthropic calls
+(60 req/min org-wide budget, shared), backoff on 429/5xx honouring `Retry-After`, restart on 410 (expired cursor), ingest
+in batches of 500 events via `businessEventsClient.ingest`.
+
+Scripted alternative: `deploy/deploy.sh --org-type console --org-id acme --run-now --yes` does steps 1–3 with dtctl plus a first run
+(see `skills/deploy-claude-usage-connector/SKILL.md`; the Anthropic key is read from the `ANTHROPIC_USAGE_KEY` env var and never written to disk).
+With an OAuth dtctl context the vault step needs the `environment-api:credentials:*` scope that `dtctl auth login` does not request: create the
+Token credential in the UI instead and pass `CREDENTIAL_ID=… --skip-vault`. `deploy/deploy_all.sh` runs the three org types in one go.
+
+### 4. Team plan: CSV importer
+```bash
+export DT_INGEST_TOKEN=dt0c01....   # scope bizevents.ingest
+python3 csv-import/import_team_spend.py --csv spend-export.csv --date 2026-10-18 --tenant https://abc12345.live.dynatrace.com --org-id acme
+# --dry-run prints the payload instead of sending; --endpoint /platform/ingest/custom/events/<name> for an OpenPipeline endpoint
+```
+Columns mapped: `user email`→`user.email`, `account UUID`→`user.id`, `product`, `model`, `model family`, `total_requests`→`requests`,
+`total_prompt_tokens`→`tokens.input`, `total_completion_tokens`→`tokens.output`, `total_net_spend_usd`→`cost_usd`,
+`total_gross_spend_usd`→`cost.gross_usd`; `usage.date` = the `--date` you pass (the export period end). Rows with the same
+user/product/model are summed. Cache tokens are not in the export (0).
+
+## Querying
+
+Ingest is append-only and the connector re-reads recent days on purpose, so **every query dedupes**:
+`| dedup dedup.key, sort: {timestamp desc}` (newest revision wins) and filters on `usage.date`, not `timestamp`.
+See `dql/`:
+
+| File | Question |
+|---|---|
+| `cost-per-developer-30d.dql` | cost, tokens, requests, active days per developer, last 30 days |
+| `tokens-by-product-model.dql` | token mix (input/output/cache) and cost per product × model |
+| `top10-developers-by-cost.dql` | top 10 developers with product split |
+| `official-vs-observed-tokens.dql` | layer 3 official daily tokens vs layer 2 real-time `event.name == "api_request"` logs, per developer per day → coverage % and USD delta |
+
+## Dashboard
+
+`dashboard/claude-usage-dashboard.json` is a ready Dynatrace dashboard over the `claude.usage.daily` events (14 tiles: cost / developers /
+tokens / latest usage day KPIs, daily cost by usage day stacked by product, top 10 developers split by product, cost per developer table,
+tokens by product × model stacked by token type, official-vs-observed coverage KPI + table, freshness per source, caveats). Every data
+tile applies the dedup rule above and filters on `usage.date`; charts over time use `toTimestamp(usage.timestamp)`. The two tables reuse
+`dql/cost-per-developer-30d.dql` and `dql/official-vs-observed-tokens.dql` verbatim.
+
+Import it either way:
+
+* **Dashboards app** → *Upload* → pick `dashboard/claude-usage-dashboard.upload.json` (the content object the app expects).
+* **dtctl** (needs a context with `document:dashboards:write`):
+  ```bash
+  dtctl apply -f connector/dashboard/claude-usage-dashboard.json          # creates the dashboard, prints id + URL
+  dtctl apply -f connector/dashboard/claude-usage-dashboard.json --dry-run # validate only
+  ```
+  To update the deployed copy later, `dtctl get dashboard <id> -o json > dashboard.json`, edit that file (it carries the `id`) and apply it —
+  re-applying the generated file creates a second dashboard.
+
+Both files are generated by `python3 dashboard/build.py --check` (checks ids/layout overlaps, the dedup rule and `event.type` filter in every
+query, and that every `recordField` / unit override names a query field). Edit `build.py`, not the JSON.
+
+Things to know when reading it:
+
+* The dashboard **time picker does not apply**: tiles fix their own window (last 30 usage days; coverage tiles last 7) because the bizevent
+  `timestamp` is the ingest time. `fetch … from: now() - 45d` is deliberately wider than the window (ingest lags usage by 1–10 days).
+* The coverage tiles join layer 2 logs on `event.name == "api_request"` and the attribute names in `dql/official-vs-observed-tokens.dql`;
+  if layer 2 renames them, change the right side of that join (the table tile is read from the file at build time, the KPI is in `build.py`).
+* Bedrock / Vertex / Foundry spend is not in any tile (not exposed by Anthropic — see below); Team-plan rows exist only after running the CSV importer.
+* The queries were validated structurally only (no tenant was queried while building this). First import on a tenant: open each tile once;
+  a blank tile with a DQL error is a syntax problem to fix in `build.py`, an empty tile with no error means no events in the window yet.
+
+## Freshness and caveats
+
+| Source | Lag | Revisions | Notes |
+|---|---|---|---|
+| Enterprise Analytics API | usually < 4 h, up to 24 h; engagement endpoints 1 day | cost/usage values can change until **~7 days after the end of the calendar month** | hence the 10-day re-read; `usage.complete` flags days ≤ `data_refreshed_at`; data exists from 2026-01-01 |
+| Console Admin API | `usage_report/claude_code` is daily, typically within ~1 h. `usage_report/messages` returns **closed buckets only**: the connector reads past days with `bucket_width=1d` and today with `1h` buckets, so API usage shows up ~1 h after the request (verified on a real org) | today's rows grow during the day | 3-day re-read; `requests` not exposed; `product=api` rows have no cost (use `/v1/organizations/cost_report` if needed) |
+| Team CSV | manual; export refreshed daily with a 1-day lag | re-export and re-import overwrite via dedup | no cache token columns |
+
+* **Amazon Bedrock / Vertex / Foundry are not covered**: Claude usage through cloud marketplaces does not appear in any of these
+  Anthropic endpoints (the Enterprise API explicitly excludes Bedrock Claude Code activity; Console on AWS has no usage API).
+  Use the cloud provider's billing export for that.
+* Cost figures are Anthropic's estimates/invoices at read time, in USD; amounts arrive as decimal strings in cents and are
+  divided by 100 (6-decimal rounding — fine for dashboards, use the raw API for invoicing-grade reconciliation).
+* Rate limit is per organization (60 req/min) and shared with any other consumer of the Analytics API.
+* The bizevent `timestamp` is the ingest time; chart by `toTimestamp(usage.timestamp)`.
+
+## Local test (no tenant, no real key)
+
+```bash
+./test/run_tests.sh        # starts test/mock_server.py on 127.0.0.1:8787, runs the 4 built tasks under Node for the 3 org types,
+                           # runs the CSV importer (--dry-run and against the sink), checks dedup.key parity and schema → test/test.log
+```
+The Node shims in `test/mocks/node_modules/@dynatrace-sdk/*` implement exactly the SDK calls the tasks use
+(`credentialVaultClient.getCredentialsDetails`, `businessEventsClient.ingest`, `execution`, `result`), so the scripts embedded in
+the workflow JSON are the ones under test. The mock returns 429 on the first call to each endpoint and rejects cursors whose
+query params changed, which exercises the backoff and the pagination contract.

@@ -1,0 +1,10 @@
+user email,account UUID,product,model,model family,total_requests,total_prompt_tokens,total_completion_tokens,total_net_spend_usd,total_gross_spend_usd
+alice@example.com,3f1c2a10-0000-4000-8000-000000000001,chat,claude-sonnet-5-5,sonnet,142,1850400,210300,8.41,9.67
+alice@example.com,3f1c2a10-0000-4000-8000-000000000001,claude_code,claude-opus-5-5,opus,318,9120500,1456000,146.22,168.15
+alice@example.com,3f1c2a10-0000-4000-8000-000000000001,chat,claude-opus-5-5,opus,27,640200,98100,12.08,13.89
+bob@example.com,3f1c2a10-0000-4000-8000-000000000002,claude_code,claude-sonnet-5-5,sonnet,512,15230000,2210000,61.37,70.58
+bob@example.com,3f1c2a10-0000-4000-8000-000000000002,cowork,claude-sonnet-5-5,sonnet,44,2201000,310500,9.98,11.48
+carol@example.com,3f1c2a10-0000-4000-8000-000000000003,chat,claude-haiku-5-5,haiku,96,410800,52300,0.62,0.71
+carol@example.com,3f1c2a10-0000-4000-8000-000000000003,claude_design,claude-opus-5-5,opus,12,380000,120400,10.11,11.63
+dave@example.com,3f1c2a10-0000-4000-8000-000000000004,claude_code,claude-opus-5-5,opus,205,6450000,980000,98.75,113.56
+dave@example.com,3f1c2a10-0000-4000-8000-000000000004,claude_code,claude-opus-5-5,opus,15,420000,61000,6.40,7.36

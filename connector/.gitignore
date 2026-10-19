@@ -1,0 +1,4 @@
+test/mocks/.run/
+test/mock_server.stderr
+deploy/.out/
+__pycache__/

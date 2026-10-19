@@ -1,0 +1,38 @@
+title: Dynatrace AI Observability for Claude (Desktop app & CLI)
+description: >
+  Installer scripts (macOS, Linux, Windows) that bring Claude Code telemetry
+  from the Claude Desktop app (Code tab) and the claude CLI into Dynatrace
+  without VS Code: the same Python hook and OpenTelemetry Collector used by the
+  dt-ai-observability-vscode asset, packaged as a user service with the API
+  token in the OS credential store, plus optional Claude Code native OTel
+  metrics and logs and the shared "Developers AI Usage" dashboard.
+purpose: >
+  When developers use Claude through the Desktop app or the terminal instead
+  of VS Code, this integration gives per-developer token, cost, model and
+  tool-call observability (user.email, squad, cost_center) with prompt content
+  stripped by default, so platform and FinOps teams can see adoption and spend
+  across the whole fleet with one dashboard.
+author: Marcelo Coletta
+contact: '@marcelo.coletta'
+asset_type: integration
+use_case: application
+deployment:
+  - SaaS
+tags:
+  - AIObservability
+  - AIAgent
+  - OTel
+  - ClaudeCode
+  - FinOps
+setup_instructions: >
+  Create a Dynatrace API token with openTelemetryTrace.ingest, metrics.ingest
+  and logs.ingest scopes. On each developer machine run install.sh (macOS,
+  Linux) or install.ps1 (Windows) with the tenant OTLP endpoint, the token,
+  the developer e-mail and optional squad / cost center; restart open Claude
+  Code sessions. Import Dashboard/Developers AI Usage.json into the tenant.
+  Optionally roll out managed-settings.example.json as Claude Code managed
+  settings to add native metrics and logs. Prompt and response capture is off
+  by default and must be explicitly enabled with --capture-prompts.
+related_assets:
+  - /integrations/application/dt-ai-observability-vscode
+  - /apps/application/ai-observability-3-0

@@ -1,0 +1,215 @@
+=== dt-ai-observability-claude connector — local test run 2026-10-19T22:58:54Z ===
+node v22.22.0, Python 3.9.6, mock=http://127.0.0.1:8787
+
+--- [1/5] enterprise adapter (org_type=enterprise, 10-day window, cost+usage, 2 pages each, 429 on first call) ---
+[resolve_config] org_type=enterprise base=http://127.0.0.1:8787 dry_run=false credential=CREDENTIALS_VAULT-MOCK
+RESULT resolve_config (1 ms): {"org_type":"enterprise","credential_id":"CREDENTIALS_VAULT-MOCK","credential_name":"","anthropic_base_url":"http://127.0.0.1:8787","org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500}
+[enterprise] window 2026-10-09T00:00:00.000Z .. 2026-10-19T00:00:00.000Z (10 days)
+[enterprise] [anthropic] 429 on /v1/organizations/analytics/user_cost_report; backing off 1000 ms (attempt 1/5)
+[enterprise] [anthropic] 429 on /v1/organizations/analytics/user_usage_report; backing off 1000 ms (attempt 1/5)
+[enterprise] [ingest] 353/353 events
+[enterprise] {"source":"enterprise_api","events":353,"ingested":353,"api_calls":6,"data_refreshed_at":"2026-10-19T17:58:57Z","org_id":"org_mock01","cost_rows":271,"usage_rows":259,"cost_pages":2,"usage_pages":2}
+RESULT enterprise_analytics (5535 ms): {"source":"enterprise_api","events":353,"ingested":353,"api_calls":6,"data_refreshed_at":"2026-10-19T17:58:57Z","org_id":"org_mock01","cost_rows":271,"usage_rows":259,"cost_pages":2,"usage_pages":2}
+RESULT console_claude_code (0 ms): {"skipped":true,"reason":"org_type=enterprise"}
+RESULT team_reminder (0 ms): {"skipped":true,"reason":"org_type=enterprise"}
+
+--- [2/5] console adapter (org_type=console, credential looked up by NAME, 3 days claude_code + messages by model+workspace) ---
+[resolve_config] org_type=console base=http://127.0.0.1:8787 dry_run=false credential=name:Anthropic console usage API key
+RESULT resolve_config (1 ms): {"org_type":"console","credential_id":"","credential_name":"Anthropic console usage API key","anthropic_base_url":"http://127.0.0.1:8787","org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500}
+RESULT enterprise_analytics (0 ms): {"skipped":true,"reason":"org_type=console"}
+[console] days: 2026-10-19, 2026-10-18, 2026-10-17
+[console] [anthropic] 429 on /v1/organizations/usage_report/claude_code; backing off 1000 ms (attempt 1/5)
+[console] [anthropic] 429 on /v1/organizations/usage_report/messages; backing off 1000 ms (attempt 1/5)
+[console] [ingest] 40/40 events
+[console] {"source":"console_api","events":40,"ingested":40,"api_calls":10,"org_id":"org_mock01","days":["2026-10-19","2026-10-18","2026-10-17"],"claude_code_rows":20,"claude_code_pages":6,"api_rows":28,"api_pages":2}
+RESULT console_claude_code (9923 ms): {"source":"console_api","events":40,"ingested":40,"api_calls":10,"org_id":"org_mock01","days":["2026-10-19","2026-10-18","2026-10-17"],"claude_code_rows":20,"claude_code_pages":6,"api_rows":28,"api_pages":2}
+RESULT team_reminder (0 ms): {"skipped":true,"reason":"org_type=console"}
+
+--- [3/5] team no-op task (org_type=team) ---
+[resolve_config] org_type=team base=https://api.anthropic.com dry_run=false credential=name:Anthropic team usage API key
+RESULT resolve_config (2 ms): {"org_type":"team","credential_id":"","credential_name":"Anthropic team usage API key","anthropic_base_url":"https://api.anthropic.com","org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500}
+RESULT enterprise_analytics (0 ms): {"skipped":true,"reason":"org_type=team"}
+RESULT console_claude_code (0 ms): {"skipped":true,"reason":"org_type=team"}
+[team] org_type=team: no Anthropic API exposes per-user usage for Team plans.
+Export the spend CSV from claude.ai > Settings > Analytics and run:
+  python3 connector/csv-import/import_team_spend.py --csv <export.csv> --date <YYYY-MM-DD period end> --tenant <https://ENV.live.dynatrace.com>
+with DT_INGEST_TOKEN set (scope bizevents.ingest). Events land as source=team_csv.
+RESULT team_reminder (0 ms): {"source":"team_csv","events":0,"reminder":"org_type=team: no Anthropic API exposes per-user usage for Team plans.\nExport the spend CSV from claude.ai > Settings > Analytics and run:\n  python3 connector/csv-import/import_team_spend.py --csv <export.csv> --date <YYYY-MM-DD period end> --tenant <https://ENV.live.dynatrace.com>\nwith DT_INGEST_TOKEN set (scope bizevents.ingest). Events land as source=team_csv."}
+
+--- [4/5] CSV importer --dry-run (first 2 events shown) ---
+[team_csv] 8 events from ~/projects/dt-ai-observability-claude/connector/csv-import/sample.csv for 2026-10-18; users=4 net_spend_usd=353.94
+[
+  {
+    "event.type": "claude.usage.daily",
+    "event.provider": "dt-ai-observability-claude",
+    "schema.version": "1.0",
+    "user.email": "alice@example.com",
+    "user.id": "3f1c2a10-0000-4000-8000-000000000001",
+    "product": "chat",
+    "product.raw": "chat",
+    "model": "claude-sonnet-5-5",
+    "model.family": "sonnet",
+    "tokens.input": 1850400,
+    "tokens.output": 210300,
+    "tokens.cache_read": 0,
+    "tokens.cache_creation": 0,
+    "tokens.total": 2060700,
+    "requests": 142,
+    "cost_usd": 8.41,
+    "cost.gross_usd": 9.67,
+    "source": "team_csv",
+    "usage.date": "2026-10-18",
+    "usage.timestamp": "2026-10-18T00:00:00Z",
+    "usage.complete": true,
+    "org.id": "org_team_demo",
+    "dedup.key": "571529e62714dbf864dc32cb4d4fcbcf"
+  },
+  {
+    "event.type": "claude.usage.daily",
+    "event.provider": "dt-ai-observability-claude",
+    "schema.version": "1.0",
+    "user.email": "alice@example.com",
+    "user.id": "3f1c2a10-0000-4000-8000-000000000001",
+    "product": "claude_code",
+    "product.raw": "claude_code",
+    "model": "claude-opus-5-5",
+    "model.family": "opus",
+    "tokens.input": 9120500,
+    "tokens.output": 1456000,
+    "tokens.cache_read": 0,
+    "tokens.cache_creation": 0,
+    "tokens.total": 10576500,
+    "requests": 318,
+    "cost_usd": 146.22,
+    "cost.gross_usd": 168.15,
+    "source": "team_csv",
+    "usage.date": "2026-10-18",
+    "usage.timestamp": "2026-10-18T00:00:00Z",
+    "usage.complete": true,
+    "org.id": "org_team_demo",
+    "dedup.key": "96d0d8975087c2d6b8c42f78f26b8127"
+  }
+]
+... 8 events total
+
+--- [5/5] CSV importer -> mock sink ---
+[team_csv] 8 events from ~/projects/dt-ai-observability-claude/connector/csv-import/sample.csv for 2026-10-18; users=4 net_spend_usd=353.94
+[team_csv] ingested 8/8 (HTTP 202)
+{"source": "team_csv", "events": 8, "ingested": 8, "date": "2026-10-18", "endpoint": "http://127.0.0.1:8787/api/v2/bizevents/ingest"}
+
+--- dedup.key parity (Python importer vs JS common.js) for (alice@example.com, chat, claude-sonnet-5-5, 2026-10-18, team_csv) ---
+python: 571529e62714dbf864dc32cb4d4fcbcf
+node:   571529e62714dbf864dc32cb4d4fcbcf
+PARITY_OK
+
+--- sink summary ---
+events received: 401
+by source: {"enterprise_api": 353, "console_api": 40, "team_csv": 8}
+by product: {"chat": 115, "claude_code": 110, "cowork": 74, "design": 83, "api": 19}
+requests to mock (method, path, status, count):
+  GET  200   2  /v1/organizations/analytics/user_cost_report
+  GET  429   1  /v1/organizations/analytics/user_cost_report
+  GET  200   2  /v1/organizations/analytics/user_usage_report
+  GET  429   1  /v1/organizations/analytics/user_usage_report
+  GET  200   6  /v1/organizations/usage_report/claude_code
+  GET  429   1  /v1/organizations/usage_report/claude_code
+  GET  200   2  /v1/organizations/usage_report/messages
+  GET  429   1  /v1/organizations/usage_report/messages
+  POST 202   3  /api/v2/bizevents/ingest
+
+--- one sample event per source ---
+{
+  "event.type": "claude.usage.daily",
+  "event.provider": "dt-ai-observability-claude",
+  "schema.version": "1.0",
+  "user.email": "alice@example.com",
+  "product": "chat",
+  "product.raw": "chat",
+  "model": "claude-opus-5-5",
+  "tokens.input": 339334,
+  "tokens.output": 231945,
+  "tokens.cache_read": 561826,
+  "tokens.cache_creation": 31517,
+  "tokens.total": 1164622,
+  "requests": 651,
+  "cost_usd": 630.444139,
+  "source": "enterprise_api",
+  "usage.date": "2026-10-09",
+  "usage.timestamp": "2026-10-09T00:00:00Z",
+  "usage.complete": true,
+  "org.id": "org_mock01",
+  "dedup.key": "421aa290cf3770c869bc86c313f2c6ad",
+  "cost.list_usd": 725.01076,
+  "cost.currency": "USD",
+  "tools.web_search_requests": 11,
+  "data.refreshed_at": "2026-10-19T17:58:57Z",
+  "user.id": "user_01A"
+}
+{
+  "event.type": "claude.usage.daily",
+  "event.provider": "dt-ai-observability-claude",
+  "schema.version": "1.0",
+  "user.email": "alice@example.com",
+  "product": "claude_code",
+  "product.raw": "claude_code",
+  "model": "claude-opus-5-5",
+  "tokens.input": 61964,
+  "tokens.output": 16216,
+  "tokens.cache_read": 363233,
+  "tokens.cache_creation": 4275,
+  "tokens.total": 445688,
+  "requests": null,
+  "cost_usd": 45.67,
+  "source": "console_api",
+  "usage.date": "2026-10-19",
+  "usage.timestamp": "2026-10-19T00:00:00Z",
+  "usage.complete": false,
+  "org.id": "org_mock01",
+  "dedup.key": "b1ed2feece1edba0818373f9fb189f1a",
+  "actor.type": "user_actor",
+  "claude_code.customer_type": "api",
+  "claude_code.subscription_type": null,
+  "claude_code.terminal_types": [
+    "vscode"
+  ],
+  "claude_code.remote": false,
+  "claude_code.sessions": 7,
+  "claude_code.commits": 9,
+  "claude_code.pull_requests": 1,
+  "claude_code.lines_added": 192,
+  "claude_code.lines_removed": 278,
+  "claude_code.tool_accepted": 44,
+  "claude_code.tool_rejected": 0
+}
+{
+  "event.type": "claude.usage.daily",
+  "event.provider": "dt-ai-observability-claude",
+  "schema.version": "1.0",
+  "user.email": "alice@example.com",
+  "user.id": "3f1c2a10-0000-4000-8000-000000000001",
+  "product": "chat",
+  "product.raw": "chat",
+  "model": "claude-sonnet-5-5",
+  "model.family": "sonnet",
+  "tokens.input": 1850400,
+  "tokens.output": 210300,
+  "tokens.cache_read": 0,
+  "tokens.cache_creation": 0,
+  "tokens.total": 2060700,
+  "requests": 142,
+  "cost_usd": 8.41,
+  "cost.gross_usd": 9.67,
+  "source": "team_csv",
+  "usage.date": "2026-10-18",
+  "usage.timestamp": "2026-10-18T00:00:00Z",
+  "usage.complete": true,
+  "org.id": "org_team_demo",
+  "dedup.key": "571529e62714dbf864dc32cb4d4fcbcf"
+}
+
+--- schema checks over all sink events ---
+events=401 missing_fields=0 bad_event_type=0 bad_dedup_key=0 bad_date=0 bad_product=0 duplicate_keys_in_single_run=0
+api rows (user.email null, api.workspace_id set): 19; api_actor rows (user.email apikey:*): 6
+SCHEMA_OK
+
+=== ALL TESTS PASSED ===

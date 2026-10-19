@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" width="1180" height="760" font-family="Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa0a6"/></marker>
+    <marker id="arrb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4f9cf9"/></marker>
+  </defs>
+  <style>
+    .lane { fill:#1b1b22; stroke:#2b2b33; }
+    .title { fill:#ffffff; font-size:20px; font-weight:700; }
+    .sub { fill:#b3b7bd; font-size:12px; }
+    .lanet { fill:#ffffff; font-size:14px; font-weight:700; }
+    .box { fill:#24242c; stroke:#3a3a44; stroke-width:1; rx:8; }
+    .boxm { fill:#2a2420; stroke:#b7791f; stroke-width:1.2; rx:8; }
+    .boxa { fill:#1f2a24; stroke:#2e9e6a; stroke-width:1.2; rx:8; }
+    .h { fill:#ffffff; font-size:13px; font-weight:700; }
+    .t { fill:#cfd3d8; font-size:11.5px; }
+    .n { fill:#ffffff; font-size:12px; font-weight:700; }
+    .num { fill:#4f9cf9; }
+    .numm { fill:#b7791f; }
+    .ln { stroke:#9aa0a6; stroke-width:1.4; fill:none; marker-end:url(#arr); }
+    .lnb { stroke:#4f9cf9; stroke-width:1.6; fill:none; marker-end:url(#arrb); stroke-dasharray:5 4; }
+    .leg { fill:#b3b7bd; font-size:11.5px; }
+  </style>
+  <rect width="1180" height="760" fill="#16161d"/>
+  <text x="24" y="34" class="title">dt-ai-observability-claude: processo de instalação</text>
+  <text x="24" y="54" class="sub">Camadas 1+2 na máquina de cada desenvolvedor (install.sh / install.ps1) e camada 3 no tenant (connector/deploy/deploy.sh via dtctl). Caixas âmbar = passo manual com segredo; verde = validação.</text>
+
+  <!-- Lane 1: Tenant prerequisites -->
+  <rect x="24" y="72" width="1132" height="120" class="lane" rx="10"/>
+  <text x="40" y="94" class="lanet">0 · Pré-requisitos no tenant Dynatrace (uma vez por tenant)</text>
+  <rect x="40" y="106" width="250" height="70" class="box"/>
+  <circle cx="58" cy="124" r="9" class="num"/><text x="54.5" y="128" class="n">a</text>
+  <text x="74" y="128" class="h">App AI &amp; LLM Observability</text>
+  <text x="52" y="146" class="t">Hub → instalar (Prompts stream, AI Obs views)</text>
+  <text x="52" y="162" class="t">dtctl: contexto OAuth no tenant (dtctl auth login)</text>
+  <rect x="310" y="106" width="270" height="70" class="boxm"/>
+  <circle cx="328" cy="124" r="9" class="numm"/><text x="324.5" y="128" class="n">b</text>
+  <text x="344" y="128" class="h">Token de ingest (Access tokens)</text>
+  <text x="322" y="146" class="t">escopos openTelemetryTrace.ingest, metrics.ingest, logs.ingest</text>
+  <text x="322" y="162" class="t">o dev cola no instalador; nunca no chat / repositório</text>
+  <rect x="600" y="106" width="270" height="70" class="boxm"/>
+  <circle cx="618" cy="124" r="9" class="numm"/><text x="614.5" y="128" class="n">c</text>
+  <text x="634" y="128" class="h">Chave Anthropic no Credential vault</text>
+  <text x="612" y="146" class="t">Token · escopo AppEngine · "allow access without app context"</text>
+  <text x="612" y="162" class="t">nome: Anthropic &lt;enterprise|console&gt; usage API key</text>
+  <rect x="890" y="106" width="250" height="70" class="box"/>
+  <circle cx="908" cy="124" r="9" class="num"/><text x="904.5" y="128" class="n">d</text>
+  <text x="924" y="128" class="h">Chave Anthropic (quem gera)</text>
+  <text x="902" y="146" class="t">Enterprise: primary owner → Analytics API key</text>
+  <text x="902" y="162" class="t">Console: admin → Admin API key · Team: só CSV</text>
+
+  <!-- Lane 2: Developer machine -->
+  <rect x="24" y="208" width="560" height="470" class="lane" rx="10"/>
+  <text x="40" y="230" class="lanet">Máquina do desenvolvedor · camadas 1 + 2 · ./install.sh --endpoint &lt;tenant&gt; --email … [--capture-prompts] [--enable-native-otel]</text>
+  <rect x="40" y="244" width="250" height="62" class="box"/>
+  <circle cx="58" cy="262" r="9" class="num"/><text x="54.5" y="266" class="n">1</text>
+  <text x="74" y="266" class="h">Hook do Claude Code</text>
+  <text x="52" y="284" class="t">~/.claude/otel-hook.py + 4 entradas em settings.json</text>
+  <text x="52" y="298" class="t">(UserPromptSubmit, Pre/PostToolUse, Stop)</text>
+  <rect x="310" y="244" width="250" height="62" class="box"/>
+  <circle cx="328" cy="262" r="9" class="num"/><text x="324.5" y="266" class="n">2</text>
+  <text x="344" y="266" class="h">Atributos do dev</text>
+  <text x="322" y="284" class="t">~/.claude/otel-attrs.json: e-mail, squad,</text>
+  <text x="322" y="298" class="t">cost_center, flag de captura de prompts</text>
+  <rect x="40" y="326" width="250" height="62" class="box"/>
+  <circle cx="58" cy="344" r="9" class="num"/><text x="54.5" y="348" class="n">3</text>
+  <text x="74" y="348" class="h">Collector OTel</text>
+  <text x="52" y="366" class="t">download otelcol-contrib (~100 MB, GitHub)</text>
+  <text x="52" y="380" class="t">config renderizada: redação, resource, logs pipeline</text>
+  <rect x="310" y="326" width="250" height="62" class="boxm"/>
+  <circle cx="328" cy="344" r="9" class="numm"/><text x="324.5" y="348" class="n">4</text>
+  <text x="344" y="348" class="h">Token no cofre do SO</text>
+  <text x="322" y="366" class="t">macOS Keychain / secret-tool / arquivo 0600</text>
+  <text x="322" y="380" class="t">prompt oculto; validar formato antes de gravar</text>
+  <rect x="40" y="408" width="250" height="62" class="box"/>
+  <circle cx="58" cy="426" r="9" class="num"/><text x="54.5" y="430" class="n">5</text>
+  <text x="74" y="430" class="h">Serviço de usuário</text>
+  <text x="52" y="448" class="t">launchd / systemd --user / Scheduled Task</text>
+  <text x="52" y="462" class="t">127.0.0.1:4318 (OTLP) · 13133 (health)</text>
+  <rect x="310" y="408" width="250" height="62" class="box"/>
+  <circle cx="328" cy="426" r="9" class="num"/><text x="324.5" y="430" class="n">6</text>
+  <text x="344" y="430" class="h">OTel nativo (opcional)</text>
+  <text x="322" y="448" class="t">bloco env em settings.json: métricas + logs</text>
+  <text x="322" y="462" class="t">vale só para sessões novas (reiniciar)</text>
+  <rect x="40" y="490" width="520" height="62" class="boxa"/>
+  <circle cx="58" cy="508" r="9" fill="#2e9e6a"/><text x="54.5" y="512" class="n">7</text>
+  <text x="74" y="512" class="h">Validação</text>
+  <text x="52" y="530" class="t">health 200 · collector.log sem "Exporting failed" (401 = token errado) · fetch spans | filter service.name == "claude-code-desktop"</text>
+  <text x="52" y="544" class="t">timeseries sum(claude_code.token.usage) · reiniciar sessões abertas do Desktop/CLI</text>
+  <rect x="40" y="572" width="520" height="90" class="box"/>
+  <text x="52" y="592" class="h">Resultado por sessão</text>
+  <text x="52" y="610" class="t">spans gen_ai.* (conversa + tool calls, prompt opcional) · métricas claude_code.token.usage / cost.usage / session.count</text>
+  <text x="52" y="626" class="t">logs claude_code.api_request etc. (pendência: não visíveis no Grail do fov) · service.name distingue Desktop de CLI</text>
+  <text x="52" y="648" class="t">Desinstalar: ./uninstall.sh (remove hook, env, serviço, Keychain). Coexiste com a extensão VS Code (mesmo hook).</text>
+
+  <!-- Lane 3: Tenant / connector -->
+  <rect x="600" y="208" width="556" height="470" class="lane" rx="10"/>
+  <text x="616" y="230" class="lanet">Tenant Dynatrace · camada 3 · connector/deploy/deploy.sh --org-type &lt;enterprise|console|team&gt; --yes</text>
+  <rect x="616" y="244" width="250" height="62" class="box"/>
+  <circle cx="634" cy="262" r="9" class="num"/><text x="630.5" y="266" class="n">1</text>
+  <text x="650" y="266" class="h">Allowlist de saída</text>
+  <text x="628" y="284" class="t">builtin:dt-javascript-runtime.allowed-outbound-connections</text>
+  <text x="628" y="298" class="t">merge de api.anthropic.com (hosts existentes mantidos)</text>
+  <rect x="886" y="244" width="254" height="62" class="boxm"/>
+  <circle cx="904" cy="262" r="9" class="numm"/><text x="900.5" y="266" class="n">2</text>
+  <text x="920" y="266" class="h">Credencial (ver 0c)</text>
+  <text x="898" y="284" class="t">automático só com escopo environment-api:credentials;</text>
+  <text x="898" y="298" class="t">com OAuth do dtctl: criar na UI, workflow acha pelo nome</text>
+  <rect x="616" y="326" width="250" height="62" class="box"/>
+  <circle cx="634" cy="344" r="9" class="num"/><text x="630.5" y="348" class="n">3</text>
+  <text x="650" y="348" class="h">Workflow (dtctl apply)</text>
+  <text x="628" y="366" class="t">render inputs → claude-usage-connector.&lt;tipo&gt;.json</text>
+  <text x="628" y="380" class="t">trigger 15:00 UTC · id gravado em deploy/.out</text>
+  <rect x="886" y="326" width="254" height="62" class="box"/>
+  <circle cx="904" cy="344" r="9" class="num"/><text x="900.5" y="348" class="n">4</text>
+  <text x="920" y="348" class="h">Dashboards (dtctl apply)</text>
+  <text x="898" y="366" class="t">connector/dashboard (camada 3)</text>
+  <text x="898" y="380" class="t">Dashboard/Developers AI Usage (camadas 1+2)</text>
+  <rect x="616" y="408" width="524" height="62" class="boxa"/>
+  <circle cx="634" cy="426" r="9" fill="#2e9e6a"/><text x="630.5" y="430" class="n">5</text>
+  <text x="650" y="430" class="h">Primeira execução e validação</text>
+  <text x="628" y="448" class="t">dtctl exec workflow &lt;id&gt; --wait --show-results → api_calls, páginas, linhas, eventos · logs da task</text>
+  <text x="628" y="462" class="t">fetch bizevents | filter event.type == "claude.usage.daily" | dedup dedup.key, sort: {timestamp desc}</text>
+  <rect x="616" y="490" width="524" height="62" class="box"/>
+  <text x="628" y="510" class="h">Execução diária (15:00 UTC) · 4 tasks Run JavaScript</text>
+  <text x="628" y="528" class="t">resolve_config → enterprise_analytics | console_claude_code | team_reminder (condição por org_type)</text>
+  <text x="628" y="544" class="t">Anthropic: 60 req/min, backoff em 429, cursor congelado, 410 reinicia · bizevents em lotes de 500</text>
+  <rect x="616" y="572" width="524" height="90" class="box"/>
+  <text x="628" y="592" class="h">Por tipo de organização</text>
+  <text x="628" y="610" class="t">Enterprise: user_cost_report + user_usage_report, 10 dias, chat/claude_code/cowork/design, custo oficial</text>
+  <text x="628" y="626" class="t">Console: usage_report/claude_code (por usuário) + usage_report/messages (api, por workspace; 1d passado + 1h hoje)</text>
+  <text x="628" y="642" class="t">Team: sem API → csv-import/import_team_spend.py --csv export.csv --date … (manual)</text>
+  <text x="628" y="658" class="t">Pro/Max pessoal: sem fonte · Bedrock: fora</text>
+
+  <!-- arrows -->
+  <path d="M290,275 L310,275" class="ln"/>
+  <path d="M165,306 L165,326" class="ln"/>
+  <path d="M290,357 L310,357" class="ln"/>
+  <path d="M165,388 L165,408" class="ln"/>
+  <path d="M435,388 L435,408" class="ln"/>
+  <path d="M165,470 L165,490" class="ln"/>
+  <path d="M435,470 L435,490" class="ln"/>
+  <path d="M741,306 L741,326" class="ln"/>
+  <path d="M866,357 L886,357" class="ln"/>
+  <path d="M741,388 L741,408" class="ln"/>
+  <path d="M1013,388 L1013,408" class="ln"/>
+  <path d="M445,176 L445,244" class="lnb"/>
+  <path d="M735,176 L735,244" class="lnb"/>
+  <path d="M1015,176 L1015,244" class="lnb"/>
+
+  <!-- legend -->
+  <rect x="24" y="694" width="1132" height="50" class="lane" rx="10"/>
+  <text x="40" y="714" class="leg">Fluxo de dados depois da instalação: Claude Code → hook/OTel nativo → collector local → https://&lt;tenant&gt;.live.dynatrace.com/api/v2/otlp (traces, metrics, logs) → Grail. Camada 3: Workflow → api.anthropic.com → bizevents.</text>
+  <text x="40" y="732" class="leg">Quem faz: dev = install.sh na própria máquina (minutos, sem Docker). Admin Dynatrace/Claude = itens 0b–0d e deploy.sh (uma vez). Claude Code pode executar o deploy inteiro via dtctl (skill deploy-claude-usage-connector), exceto colar segredos.</text>
+</svg>

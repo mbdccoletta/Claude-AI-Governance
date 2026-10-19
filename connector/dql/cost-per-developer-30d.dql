@@ -1,0 +1,16 @@
+// Cost per developer, last 30 UTC days, official sources only (claude.usage.daily).
+// Bizevent ingest is append-only and the connector re-reads each day for up to 10 days
+// (Anthropic revises values), so the same dedup.key appears several times: keep the newest record.
+fetch bizevents, from: now() - 45d
+| filter event.type == "claude.usage.daily"
+| filter usage.date >= formatTimestamp(now() - 30d, format: "yyyy-MM-dd")
+| dedup dedup.key, sort: {timestamp desc}
+| summarize {
+    cost_usd = sum(cost_usd),
+    tokens_total = sum(tokens.total),
+    requests = sum(requests),
+    days_active = countDistinct(usage.date),
+    sources = collectDistinct(source)
+  }, by: {user.email}
+| fieldsAdd usd_per_1m_tokens = if(tokens_total > 0, cost_usd / tokens_total * 1000000, else: 0)
+| sort cost_usd desc

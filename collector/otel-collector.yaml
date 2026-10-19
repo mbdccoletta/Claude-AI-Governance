@@ -1,0 +1,117 @@
+# Dynatrace AI Observability for Claude — local OpenTelemetry Collector config.
+#
+# Derived from the dt-ai-observability-vscode asset (resources/otel-collector.yaml)
+# with two additions: an OTLP *logs* pipeline for Claude Code's native telemetry
+# and a gen_ai.provider.name alias so the shared dashboard's $Provider filter
+# matches the hook spans.
+#
+# All receivers and extensions bind to loopback only: the collector forwards
+# whatever it receives to the configured Dynatrace tenant with the user's
+# token, so it must not accept telemetry from other hosts on the network.
+#
+# Placeholders: install.sh / install.ps1 render every ${env:...} below except
+# DT_INGEST_TOKEN, which the service wrapper (run-collector.sh / .ps1) reads
+# from the OS credential store at start-up and passes as an environment
+# variable. The token is never written into this file.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:${env:COLLECTOR_PORT}
+      grpc:
+        endpoint: 127.0.0.1:${env:GRPC_PORT}
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+  # Safety net: Dynatrace only accepts delta temporality. Claude Code is told to
+  # export delta (OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta), but a
+  # client that ignores it still gets converted here.
+  cumulative_to_delta: {}
+  resource:
+    attributes:
+      - { key: user.email,             value: "${env:USER_EMAIL}",  action: upsert }
+      - { key: deployment.environment, value: "${env:DT_ENVIRONMENT}", action: upsert }
+      - { key: os.type,                value: "${env:OS_TYPE}",     action: upsert }
+      # install.sh / install.ps1 append custom attributes (squad, cost_center, ...) here.
+  # Privacy guard, independent of any client setting: drops prompt/response
+  # content from spans, span events and log records before anything leaves the
+  # machine. The installer removes this processor from the pipelines only when
+  # --capture-prompts is given (_capture_prompts=true in ~/.claude/otel-attrs.json).
+  transform/redact_content:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - delete_matching_keys(attributes, "^gen_ai[.](prompt|completion|input[.]messages|output[.]messages|system_instructions)")
+      - context: spanevent
+        statements:
+          - delete_matching_keys(attributes, "^gen_ai[.](prompt|completion|input[.]messages|output[.]messages|system_instructions)")
+    log_statements:
+      - context: log
+        statements:
+          # Claude Code native telemetry: the user_prompt event carries the prompt text
+          # only when OTEL_LOG_USER_PROMPTS=1; strip it anyway unless capture is on.
+          - delete_key(attributes, "prompt")
+          - delete_matching_keys(attributes, "^gen_ai[.](prompt|completion|input[.]messages|output[.]messages|system_instructions)")
+  # The hook emits gen_ai.system (older GenAI semconv). The shared dashboard and
+  # the AI Observability app filter on gen_ai.provider.name (current semconv);
+  # alias one to the other so both work without touching the hook.
+  transform/genai_compat:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["gen_ai.provider.name"], attributes["gen_ai.system"]) where attributes["gen_ai.provider.name"] == nil and attributes["gen_ai.system"] != nil
+  # Claude Code's native metrics/logs carry the Anthropic account e-mail as a
+  # record-level user.email, which would shadow the configured user.email set
+  # by the resource processor above. Keep both: the account e-mail moves to
+  # claude.account_email, user.email stays the one entered at install time on
+  # every signal (spans, metrics, logs). The installer drops this processor
+  # from the pipelines when no e-mail was configured.
+  transform/native_email:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - set(attributes["claude.account_email"], attributes["user.email"]) where attributes["user.email"] != nil
+          - delete_key(attributes, "user.email")
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["claude.account_email"], attributes["user.email"]) where attributes["user.email"] != nil
+          - delete_key(attributes, "user.email")
+
+exporters:
+  debug:
+    verbosity: normal
+  otlp_http/dynatrace:
+    # Base URL; the exporter appends /v1/traces, /v1/metrics and /v1/logs.
+    endpoint: "${env:DT_OTLP_ENDPOINT}"
+    headers:
+      Authorization: "Api-Token ${env:DT_INGEST_TOKEN}"
+    compression: gzip
+
+extensions:
+  health_check:
+    endpoint: 127.0.0.1:${env:HEALTH_PORT}
+
+service:
+  telemetry:
+    metrics:
+      level: none   # avoids binding port 8888 for the collector's own metrics
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers:  [otlp]
+      processors: [transform/genai_compat, transform/redact_content, batch, resource]
+      exporters:  [debug, otlp_http/dynatrace]
+    metrics:
+      receivers:  [otlp]
+      processors: [transform/native_email, cumulative_to_delta, batch, resource]
+      exporters:  [debug, otlp_http/dynatrace]
+    logs:
+      receivers:  [otlp]
+      processors: [transform/native_email, transform/redact_content, batch, resource]
+      exporters:  [debug, otlp_http/dynatrace]

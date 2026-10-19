@@ -1,0 +1,15 @@
+[Unit]
+Description=Dynatrace AI Observability for Claude - local OpenTelemetry Collector
+Documentation=https://github.com/Dynatrace-Internal/field-asset-library
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash __DIR__/run-collector.sh
+Restart=always
+RestartSec=5
+StandardOutput=append:__DIR__/logs/collector.log
+StandardError=append:__DIR__/logs/collector.log
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,16 @@
+// Top 10 developers by official cost, last 30 days, with their dominant product.
+fetch bizevents, from: now() - 45d
+| filter event.type == "claude.usage.daily"
+| filter usage.date >= formatTimestamp(now() - 30d, format: "yyyy-MM-dd")
+| filter isNotNull(user.email)
+| dedup dedup.key, sort: {timestamp desc}
+| summarize {
+    cost_usd = sum(cost_usd),
+    tokens_total = sum(tokens.total),
+    claude_code_usd = sum(if(product == "claude_code", cost_usd, else: 0)),
+    chat_usd = sum(if(product == "chat", cost_usd, else: 0)),
+    cowork_usd = sum(if(product == "cowork", cost_usd, else: 0)),
+    last_day = max(usage.date)
+  }, by: {user.email}
+| sort cost_usd desc
+| limit 10

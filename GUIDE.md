@@ -1,0 +1,267 @@
+# Dynatrace AI Observability for Claude — Guia de Implantação
+
+**Claude Desktop (aba Code) · Claude Code CLI → OpenTelemetry → Dynatrace**
+Versão 1.0.0 · Dynatrace Solutions Engineering LATAM
+
+---
+
+## Visão geral
+
+Este asset leva a telemetria do Claude Code (tokens, custo, modelo, duração e tool calls por desenvolvedor) para o Dynatrace **sem precisar do VS Code**. Ele reaproveita o hook Python, a configuração do OTel Collector e o dashboard do asset [dt-ai-observability-vscode](../dt-ai-observability-vscode), mas instala tudo como um serviço de usuário (launchd, systemd --user ou Tarefa Agendada) com o token guardado no cofre de credenciais do sistema operacional.
+
+```
+Claude Desktop (aba Code) ─┐ hooks PreToolUse / PostToolUse /
+claude (CLI)              ─┤ UserPromptSubmit / Stop → ~/.claude/otel-hook.py
+                           │       │ spans OTLP/JSON (gen_ai.*)
+                           │       ▼
+                           │ otelcol-contrib · 127.0.0.1:4318 (serviço do usuário, ~50 MB RAM)
+                           │       │ remove conteúdo de prompts · adiciona user.email, squad, cost_center
+Telemetria nativa ─────────┘       │ (métricas + logs, opcional, via managed settings)
+                                   ▼
+                            HTTPS → https://<tenant>.live.dynatrace.com/api/v2/otlp
+```
+
+| Sessão iniciada em | `service.name` dos spans do hook | `service.name` das métricas/logs nativos |
+|---|---|---|
+| Claude Desktop, aba Code | `claude-code-desktop` | `claude-code-desktop` (builds 2.42+; builds antigos: `claude-code`) |
+| `claude` no terminal | `claude-code` | `claude-code` |
+
+> O próprio Claude Code define o `service.name` da telemetria nativa; nos builds atuais o Desktop já aparece como `claude-code-desktop`. O `terminal.type` não ajuda (é `non-interactive` tanto no Desktop quanto em `claude -p`). Use `in(service.name, {"claude-code", "claude-code-desktop"})` nas queries; para builds antigos, o [docs/dql-examples.md](docs/dql-examples.md) mostra o join com os spans do hook pelo id da sessão.
+
+---
+
+## Pré-requisitos
+
+### Dynatrace
+
+| Item | Requisito |
+|---|---|
+| Tenant | SaaS com Grail. Use o host `.live.dynatrace.com` para OTLP, nunca `.apps.` |
+| App | AI & LLM Observability (Hub) — para o Prompts stream / visões de AI Obs |
+| Token | Escopos `openTelemetryTrace.ingest` + `metrics.ingest` + `logs.ingest` (o último só para a telemetria nativa) |
+
+Gerar token: `Ctrl+K → Access Tokens → Generate new token`.
+
+### Máquina do desenvolvedor
+
+| Recurso | Requisito |
+|---|---|
+| SO | macOS 10.15+ (Intel / Apple Silicon), Linux x64 / arm64, Windows 10 1803+ / 11 |
+| Python | 3.6+ no `PATH` (`python3` no macOS/Linux, `python` no Windows) — o hook é Python puro, sem dependências |
+| Ferramentas | `curl` + `tar` (macOS/Linux); `tar.exe` e PowerShell 5.1+ (Windows) |
+| Claude | Claude Desktop com a aba Code e/ou Claude Code CLI; os hooks são configurados no nível do usuário (`~/.claude/settings.json`) |
+| Rede (uma vez) | `github.com` e `objects.githubusercontent.com` — download do binário `otelcol-contrib` (~100 MB) |
+| Rede (sempre) | `<tenant>.live.dynatrace.com` na porta 443 |
+| RAM / disco | ~50–80 MB de RAM para o coletor; ~200 MB livres em disco |
+
+---
+
+## Instalação
+
+### macOS / Linux
+
+```bash
+./install.sh
+```
+
+O script pergunta o endpoint (basta o id do tenant, ex.: `abc12345`), o token (digitação oculta), o e-mail e, opcionalmente, squad e centro de custo.
+
+Instalação silenciosa (rollout por script):
+
+```bash
+DT_INGEST_TOKEN='dt0c01.XXXX' ./install.sh --endpoint abc12345 --email dev@empresa.com --squad plataforma --cost-center cc-1234 --non-interactive
+```
+
+### Windows (PowerShell)
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\install.ps1
+```
+
+```powershell
+$env:DT_INGEST_TOKEN = 'dt0c01.XXXX'
+.\install.ps1 -Endpoint abc12345 -Email dev@empresa.com -Squad plataforma -CostCenter cc-1234 -NonInteractive
+```
+
+### Opções úteis
+
+| macOS/Linux | Windows | Efeito |
+|---|---|---|
+| `--capture-prompts` | `-CapturePrompts` | Envia o conteúdo de prompts e respostas (desligado por padrão) |
+| `--enable-native-otel` | `-EnableNativeOtel` | Liga as métricas/logs nativos do Claude Code via bloco `env` no `settings.json` do usuário |
+| `--attr chave=valor` | `-Attr chave=valor` | Atributos customizados adicionais |
+| `--collector-port`, `--health-port` | `-CollectorPort`, `-HealthPort` | Portas (padrão 4318 / 13133; se ocupadas, a próxima livre é usada) |
+| `--otelcol-version`, `--otelcol-tarball` | `-OtelcolVersion`, `-OtelcolTarball` | Fixar a versão do coletor / instalar a partir de um tarball local (ambiente sem internet) |
+| `--non-interactive` | `-NonInteractive` | Nunca perguntar nada |
+
+Rodar o instalador de novo é seguro: ele atualiza a configuração, mantém hooks existentes, substitui o token e reinicia o serviço.
+
+**Depois de instalar, feche e reabra as sessões do Claude Code** (aba Code e CLI) para que os hooks sejam carregados.
+
+### O que fica na máquina
+
+| Caminho | Conteúdo |
+|---|---|
+| `~/.claude/otel-hook.py` | Hook (upstream v1.7.0 + patch de `service.name` para o Desktop) |
+| `~/.claude/settings.json` | 4 entradas em `hooks` (mescladas, sem apagar hooks existentes; backup `.bak-<data>` a cada alteração); bloco `env` opcional |
+| `~/.claude/otel-attrs.json` | `os.type`, atributos customizados, `_capture_prompts`, `_collector_port` |
+| `~/.dt-ai-obs/` | binário do coletor, `otel-collector.yaml` renderizado (sem token), `config.env`, wrapper `run-collector.sh`/`.ps1`, `logs/collector.log` |
+| Token | Keychain (macOS, item `dt-ai-obs-claude`), Secret Service via `secret-tool` (Linux) ou arquivo 0600 com aviso, DPAPI (Windows, `ingest-token.dpapi`) |
+| Serviço | LaunchAgent `com.dynatrace.dt-ai-obs-claude` · unidade `dt-ai-obs-claude.service` (systemd --user) · Tarefa Agendada "Dynatrace AI Observability (Claude) collector" |
+
+---
+
+## Validação
+
+### 1. Processo local
+
+```bash
+# macOS / Linux
+curl http://127.0.0.1:13133
+# Windows (PowerShell)
+Invoke-WebRequest http://127.0.0.1:13133
+# Esperado: {"status":"Server available","upSince":"...","uptime":"..."}
+```
+
+```bash
+python3 hooks/configure-hooks.py status     # hooks, env nativo, otel-attrs.json
+tail -f ~/.dt-ai-obs/logs/collector.log     # uma linha "Traces"/"Metrics"/"Logs" por lote enviado
+```
+
+### 2. Spans chegando no Dynatrace
+
+Abra **Notebooks** no tenant e execute (1–2 min após a primeira mensagem no Claude):
+
+```dql
+fetch spans, from:now()-15m
+| filter in(service.name, {"claude-code", "claude-code-desktop"})
+| summarize spans = count(), clientes = collectDistinct(service.name),
+            modelos = collectDistinct(gen_ai.request.model), devs = collectDistinct(user.email)
+```
+
+Se `spans > 0`, a pipeline está completa. Importe então o dashboard `Dashboard/Developers AI Usage.json` (Dashboards → Upload).
+
+### 3. Queries úteis
+
+**Uso por desenvolvedor e cliente (Desktop × CLI):**
+```dql
+fetch spans, from:now()-24h
+| filter in(service.name, {"claude-code", "claude-code-desktop"})
+| filter startsWith(span.name, "chat")
+| summarize requests = count(),
+            tokens_in = sum(toLong(gen_ai.usage.input_tokens)),
+            tokens_out = sum(toLong(gen_ai.usage.output_tokens)),
+            by:{user.email, service.name}
+| sort tokens_in desc
+```
+
+**Custo por chamada de API (telemetria nativa), por dev e modelo:**
+```dql
+fetch logs, from:now()-24h
+| filter in(service.name, {"claude-code", "claude-code-desktop"}) and event.name == "api_request"
+| summarize requests = count(), custo_usd = sum(toDouble(cost_usd)),
+            tokens_in = sum(toLong(input_tokens)), tokens_out = sum(toLong(output_tokens)),
+            by:{user.email, model}
+| sort custo_usd desc
+```
+
+Mais exemplos (custo por squad/centro de custo, tool calls, erros de API, métricas, join Desktop × nativo) em [docs/dql-examples.md](docs/dql-examples.md).
+
+---
+
+## Telemetria nativa do Claude Code (opcional)
+
+O Claude Code exporta métricas (`claude_code.token.usage`, `claude_code.cost.usage`, sessões, linhas de código, commits, PRs) e eventos de log (`api_request`, `api_error`, `user_prompt`, `tool_result`) quando algumas variáveis de ambiente estão definidas. O coletor deste asset já tem pipelines de `metrics` e `logs` apontando para `/api/v2/otlp/v1/metrics` e `/v1/logs`.
+
+- **Por usuário**: `install.sh --enable-native-otel` (ou `-EnableNativeOtel`) grava o bloco `env` no `~/.claude/settings.json`.
+- **Para a frota**: copie [managed-settings.example.json](managed-settings.example.json) para o caminho de managed settings, que o usuário não consegue sobrescrever:
+
+| SO | Caminho |
+|---|---|
+| macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` |
+| Linux | `/etc/claude-code/managed-settings.json` |
+| Windows | `C:\ProgramData\ClaudeCode\managed-settings.json` |
+
+Os valores importantes: `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` e `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta` (o Dynatrace só aceita delta; o processador `cumulative_to_delta` do coletor é apenas rede de segurança) e `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318` (o coletor local — o token nunca entra na configuração do Claude).
+
+Detalhes: o `service.name` nativo é definido pelo Claude Code (`claude-code-desktop` no Desktop a partir do build 2.42, `claude-code` no CLI e em builds antigos); o corpo do log (`content` no Grail) é `claude_code.<evento>`, ex.: `claude_code.api_request`, e os registros entram pelo pipeline `logs:default` no bucket `default_logs`; o e-mail da conta Anthropic vai para `claude.account_email` e o `user.email` informado na instalação é gravado em todos os sinais; `OTEL_LOG_USER_PROMPTS` fica em `0` e, mesmo que alguém ligue, o coletor apaga o campo `prompt` enquanto a captura de prompts estiver desligada.
+
+---
+
+## Atributos customizados
+
+`--squad`, `--cost-center` e `--attr chave=valor` viram atributos de recurso em todos os sinais (via coletor) e atributos de span nos spans do hook (via `otel-attrs.json`). Chaves começando com `_` são reservadas (`_capture_prompts`, `_collector_port`). Para alterar, rode o instalador de novo com os novos valores.
+
+---
+
+## Troubleshooting
+
+| Sintoma | Causa provável | Correção |
+|---|---|---|
+| `curl 127.0.0.1:13133` falha | Serviço parado | macOS: `launchctl print gui/$(id -u)/com.dynatrace.dt-ai-obs-claude`; Linux: `systemctl --user status dt-ai-obs-claude`; Windows: histórico da Tarefa Agendada. Leia `~/.dt-ai-obs/logs/collector.log` |
+| Instalador avisa que 4318/13133 estão ocupadas | Coletor da extensão VS Code (ou outro receiver) rodando | O hook segue a nova porta (`_collector_port`); ajuste `OTEL_EXPORTER_OTLP_ENDPOINT` para a telemetria nativa, ou pare o outro coletor e reinstale |
+| `Exporting failed` / 401 / 403 no log | Escopos do token ou host `.apps.` | Reinstale com token correto e endpoint `.live.` |
+| 400 em `/v1/metrics` | Temporalidade cumulativa | Garanta `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta` (managed settings vencem as do usuário) |
+| Spans chegam, métricas/logs não | Telemetria nativa desligada ou sessão antiga | `python3 hooks/configure-hooks.py status`; reinicie o Claude Code |
+| Spans **e** métricas chegam, o `collector.log` mostra lotes `Logs` com HTTP 200 e sem `partialSuccess`, mas `fetch logs` não acha nada (nem por `session.id` ou `content`) | **Permissão de leitura no Grail**, não ingestão: os logs OTLP entram pelo pipeline `logs:default` no bucket `default_logs`. Se a política IAM do usuário que consulta não tem `storage:buckets:read` nesse bucket, os registros são gravados mas ficam invisíveis para ele — a ingestão responde sucesso e nada na UI explica. (O formato do registro está correto: variantes de body, `event.name`, timestamp e número de atributos foram testadas) | 1. `fetch dt.system.buckets \| filter dt.system.table == "logs"` — a coluna *has access* de `default_logs` tem de ser `true`. 2. `fetch logs, from:now()-2h \| summarize count(), by:{dt.system.bucket, dt.openpipeline.pipelines}` mostra onde estão os logs que você consegue ler. 3. No tenant: peça ao admin para incluir `default_logs` na sua política (`ALLOW storage:buckets:read WHERE storage:bucket-name = "default_logs";`) **ou** crie em OpenPipeline → Logs uma regra de roteamento `matchesValue(service.name, "claude-code*")` para um pipeline cujo estágio de storage grava num bucket legível (ex.: `claude_code_logs`). Reverifique com [docs/dql-examples.md](docs/dql-examples.md#native-logs-health-check) |
+| Nenhum span | Python ausente ou sessões abertas antes da instalação | `python3 --version`; reinicie o Claude Code; teste `echo '{"hook_event_name":"Stop","session_id":"x"}' \| python3 ~/.claude/otel-hook.py; echo $?` (deve ser 0) |
+| `user.email` vazio | Instalado sem `--email` | Reinstale com `--email` |
+| Linux: `secret-tool` funciona no terminal mas o serviço não lê o token | Sem sessão D-Bus para o `systemd --user` | Reinstale numa sessão gráfica ou use o fallback de arquivo 0600 |
+| Spans do Desktop aparecem como `claude-code` | A extensão VS Code sobrescreveu `~/.claude/otel-hook.py` | Reinstale (os dois gravam o mesmo arquivo; o último vence). O dashboard funciona dos dois jeitos |
+
+---
+
+## Desinstalação
+
+```bash
+./uninstall.sh          # --yes pula a confirmação; --keep-hooks / --keep-binary mantêm partes
+```
+
+```powershell
+.\uninstall.ps1         # -Yes, -KeepHooks, -KeepBinary
+```
+
+Remove o serviço, o token, as entradas de hook que apontam para `otel-hook.py` (outros hooks ficam), as variáveis de env que o asset adicionou, `otel-attrs.json`, `otel-state/` e `~/.dt-ai-obs/`. Reinicie as sessões do Claude Code depois.
+
+---
+
+## Teste local sem tenant
+
+`test/run-local-test.sh` instala apontando para um sink HTTP local (`test/sink.py`, porta 9999) com token fictício, dispara os quatro eventos de hook para uma sessão "Desktop" e uma "CLI", opcionalmente roda `claude -p` com telemetria nativa, verifica que nenhum texto de prompt chegou ao sink e, com `--uninstall`, desfaz tudo. O resultado da última execução está em `test/local-e2e.log`.
+
+---
+
+## Estrutura do projeto
+
+```
+dt-ai-observability-claude/
+├── install.sh / uninstall.sh          macOS e Linux
+├── install.ps1 / uninstall.ps1        Windows
+├── hooks/
+│   ├── otel-hook.py                   hook (upstream v1.7.0 + patch service.name)
+│   ├── otel-hook.patch                o diff aplicado
+│   ├── upstream/otel-hook.py          cópia literal do HOOK_SCRIPT da extensão VS Code
+│   └── configure-hooks.py             mescla/remove hooks, otel-attrs.json, env nativo
+├── collector/
+│   ├── otel-collector.yaml            template do coletor (traces + metrics + logs)
+│   ├── render-config.py               renderiza o template para ~/.dt-ai-obs
+│   ├── run-collector.sh / .ps1        wrapper do serviço (lê o token do cofre)
+│   ├── com.dynatrace.dt-ai-obs-claude.plist
+│   └── dt-ai-obs-claude.service
+├── managed-settings.example.json      telemetria nativa do Claude Code para a frota
+├── Dashboard/Developers AI Usage.json dashboard (idêntico ao do asset VS Code)
+├── docs/dql-examples.md
+├── test/                              sink + teste ponta a ponta
+├── README.md · GUIDE.md · meta.yaml · LICENSE
+└── connector/                         componente separado (conector de uso do Claude), README próprio
+```
+
+---
+
+## Privacidade e segurança
+
+- **Sem conteúdo de prompts por padrão** — o hook só envia conteúdo com `_capture_prompts: "true"`, e o coletor apaga `gen_ai.prompt*`, `gen_ai.completion*`, `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions` e o campo `prompt` dos logs nativos antes de qualquer envio. Ficam apenas metadados (modelo, tokens, custo, nomes de ferramentas e entrada/saída das tool calls do hook).
+- **Token fora de texto plano** — Keychain / Secret Service / DPAPI; o wrapper injeta o token como variável de ambiente apenas no processo do coletor. O YAML renderizado e o `config.env` (modo 0600) não contêm o token.
+- **Somente loopback** — receivers OTLP e health check em `127.0.0.1`; saída apenas HTTPS para o tenant.
+- **Binário verificável** — baixado de [open-telemetry/opentelemetry-collector-releases](https://github.com/open-telemetry/opentelemetry-collector-releases) com checagem SHA-256; versão fixável e instalação a partir de tarball local para ambientes isolados.

@@ -5,7 +5,8 @@
 First complete version of **Dynatrace AI Observability for Claude**: three layers, one tenant.
 
 ### Layer 1 · Claude Code hooks → spans
-- `install.sh` / `install.ps1`: hook (`~/.claude/otel-hook.py`, upstream v1.7.0 + `service.name=claude-code-desktop` patch),
+- `install.sh` / `install.ps1`: hook (`~/.claude/otel-hook.py`, upstream v1.7.0 + two small patches in `hooks/otel-hook.patch`:
+  `service.name=claude-code-desktop` for the Desktop app and the prompt cleaning below),
   developer attributes, otelcol-contrib as a user service (launchd / systemd / Scheduled Task), ingest token in the OS credential store,
   optional `--capture-prompts`, `uninstall.sh` / `uninstall.ps1`.
 - Prompt cleaning: `<system-reminder>…</system-reminder>` blocks injected by the Claude Desktop app are dropped and
@@ -45,3 +46,8 @@ First complete version of **Dynatrace AI Observability for Claude**: three layer
 - Enterprise adapter validated against the documented API shapes and a mock only (no Enterprise key was available).
 - Credential vault creation via dtctl needs `environment-api:credentials:*`; with an OAuth context create the credential in the UI.
 - Native logs/metrics from Claude Code on the web require the OTEL_* variables in the cloud environment (no local collector there).
+- `user.email`, `squad` and `cost_center` are resource attributes on the native metrics, not datapoint dimensions: `timeseries … by: {user.email}`
+  on `claude_code.*` returns null (verified). Per-developer splits come from the hook spans and the `api_request` log events; datapoint-level
+  stamping in the collector is planned.
+- `claude.tool_input` / `claude.tool_response` (first 4 KiB) are sent on every tool span regardless of `--capture-prompts`; a redaction option is planned.
+- The installer only checks that the ingest token is non-empty (a double paste into the hidden prompt yields 401); a format check is planned.

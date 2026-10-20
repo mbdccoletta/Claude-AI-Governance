@@ -5,6 +5,18 @@ Versão 1.0.0 · Dynatrace Solutions Engineering LATAM
 
 ---
 
+## As três camadas
+
+| Camada | Fonte | O que responde | Onde fica |
+|---|---|---|---|
+| 1 · Hooks | eventos de hook do Claude Code → spans `gen_ai.*` | o que aconteceu em cada conversa e tool call, em tempo real; prompts opcionais | esta pasta (`install.sh`) |
+| 2 · OTel nativo | métricas e eventos de log do próprio Claude Code | tokens e custo por chamada de API, sessões, linhas de código, commits | esta pasta (`--enable-native-otel`) |
+| 3 · Oficial | Anthropic Enterprise Analytics API, Console Admin API, CSV do Team | o que a Anthropic cobra por usuário e produto na org inteira, incl. chat do claude.ai, Cowork, Design, Claude Code na web | [`connector/`](connector/README.md) |
+
+Diagramas: [visão geral](docs/overview.svg) · [coleta de dados](connector/docs/data-collection-architecture.svg) · [processo de instalação](connector/docs/installation-process.svg).
+
+> A camada 3 (connector) está documentada **em inglês** em [`connector/README.md`](connector/README.md), [`connector/schema.md`](connector/schema.md) e na skill [`connector/skills/deploy-claude-usage-connector/SKILL.md`](connector/skills/deploy-claude-usage-connector/SKILL.md); o resumo em português está no diagrama de visão geral e na seção "Ordem de instalação" abaixo.
+
 ## O que é medido onde
 
 | Por onde o dev usa o Claude | Tempo real na máquina (camadas 1 + 2) | Oficial da Anthropic (camada 3) |
@@ -12,13 +24,13 @@ Versão 1.0.0 · Dynatrace Solutions Engineering LATAM
 | **Claude Desktop, aba Code** | ✅ conversas, tool calls, tokens, custo por chamada, prompts (opcional) | ✅ como `claude_code` (org Enterprise ou Console) |
 | **`claude` CLI no terminal** | ✅ idem (`service.name = claude-code`) | ✅ como `claude_code` |
 | **VS Code / Cursor** | ✅ mesmo hook (este instalador ou o asset VS Code) | ✅ como `claude_code` |
-| **Claude Code na web** (nuvem da Anthropic) | ⚠️ só métricas/logs nativos, se o ambiente cloud tiver as variáveis `OTEL_*` | ✅ como `claude_code` (remoto) |
+| **Claude Code na web** (nuvem da Anthropic) | ⚠️ só métricas/logs nativos, se o ambiente cloud tiver as variáveis `OTEL_*` (endpoint = `https://<tenant>.live.dynatrace.com/api/v2/otlp`, token em `OTEL_EXPORTER_OTLP_HEADERS`, `http/protobuf`; sem coletor local, logo sem redação nem `user.email`) | ✅ como `claude_code` (remoto) |
 | **Cowork** (dentro do app Desktop) | ❌ sem hooks, sem OTel | ✅ como `cowork` (Enterprise) ou via CSV do Team |
 | **claude.ai chat, Design** | ❌ | ✅ como `chat` / `design` (Enterprise) ou via CSV do Team |
 | **Assinatura pessoal Pro / Max** | ✅ em máquina instrumentada | ❌ a Anthropic não expõe API para planos pessoais |
 | **Claude via Bedrock, Vertex, Foundry** | ✅ os hooks funcionam para Claude Code | ❌ usar o billing da nuvem |
 
-Regra prática: as camadas 1 + 2 respondem *o que está acontecendo agora e como* nas máquinas instrumentadas; a camada 3 responde *o que a Anthropic cobra da organização inteira*, incluindo produtos sem hook e quem não instalou nada. A query `dql/official-vs-observed-tokens.dql` cruza as duas.
+Regra prática: as camadas 1 + 2 respondem *o que está acontecendo agora e como* nas máquinas instrumentadas; a camada 3 responde *o que a Anthropic cobra da organização inteira*, incluindo produtos sem hook e quem não instalou nada. A query [`connector/dql/official-vs-observed-tokens.dql`](connector/dql/official-vs-observed-tokens.dql) cruza as duas.
 
 ### Respostas rápidas
 
@@ -53,16 +65,22 @@ Os tipos de chave não são intercambiáveis: uma Admin API key não chama a Ana
 
 A chave da Anthropic é guardada uma vez no Credential vault do tenant e lida pelo workflow pelo nome; nunca chega às máquinas dos desenvolvedores.
 
+### Ordem de instalação / quem faz o quê
+
+1. **Admin Dynatrace, uma vez**: instala o app AI & LLM Observability pelo Hub, cria o token de ingest (`openTelemetryTrace.ingest`, `metrics.ingest`, `logs.ingest`), confere que o grupo IAM dos devs lê o bucket `default_logs` (ver [Troubleshooting](#troubleshooting)) e importa o `Dashboard/Developers AI Usage.json` (Dashboards → Upload).
+2. **Cada desenvolvedor**: roda `./install.sh` (ou `.\install.ps1`) com o token, reabre as sessões do Claude Code e executa a DQL de health check de [docs/dql-examples.md](docs/dql-examples.md#health-check-is-data-arriving).
+3. **Opcional, admin, uma vez — camada 3**: o primary owner / admin da org Claude cria a Analytics ou Admin API key → o admin Dynatrace guarda a chave no Credential vault (nome `Anthropic <org_type> usage API key`) → `connector/deploy/deploy.sh --org-type enterprise|console --org-id <rótulo> --run-now --yes` (allowlist, vault, workflow, primeira execução) → importa `connector/dashboard/claude-usage-dashboard.upload.json` (Dashboards → Upload, ou `dtctl apply -f connector/dashboard/claude-usage-dashboard.json`). Plano Team: roda o importador CSV em vez do workflow.
+
 ## Visão geral
 
-Este asset leva a telemetria do Claude Code (tokens, custo, modelo, duração e tool calls por desenvolvedor) para o Dynatrace **sem precisar do VS Code**. Ele reaproveita o hook Python, a configuração do OTel Collector e o dashboard do asset [dt-ai-observability-vscode](../dt-ai-observability-vscode), mas instala tudo como um serviço de usuário (launchd, systemd --user ou Tarefa Agendada) com o token guardado no cofre de credenciais do sistema operacional.
+Este asset leva a telemetria do Claude Code (tokens, custo, modelo, duração e tool calls por desenvolvedor) para o Dynatrace **sem precisar do VS Code**. Ele reaproveita o hook Python, a configuração do OTel Collector e o dashboard do asset [dt-ai-observability-vscode](https://github.com/Dynatrace-Internal/field-asset-library/tree/main/integrations/application/dt-ai-observability-vscode), mas instala tudo como um serviço de usuário (launchd, systemd --user ou Tarefa Agendada) com o token guardado no cofre de credenciais do sistema operacional.
 
 ```
 Claude Desktop (aba Code) ─┐ hooks PreToolUse / PostToolUse /
 claude (CLI)              ─┤ UserPromptSubmit / Stop → ~/.claude/otel-hook.py
                            │       │ spans OTLP/JSON (gen_ai.*)
                            │       ▼
-                           │ otelcol-contrib · 127.0.0.1:4318 (serviço do usuário, ~50 MB RAM)
+                           │ otelcol-contrib · 127.0.0.1:4318 (serviço do usuário, ~50–80 MB RAM, ~200 MB em disco)
                            │       │ remove conteúdo de prompts · adiciona user.email, squad, cost_center
 Telemetria nativa ─────────┘       │ (métricas + logs, opcional, via managed settings)
                                    ▼
@@ -71,7 +89,7 @@ Telemetria nativa ─────────┘       │ (métricas + logs, op
 
 | Sessão iniciada em | `service.name` dos spans do hook | `service.name` das métricas/logs nativos |
 |---|---|---|
-| Claude Desktop, aba Code | `claude-code-desktop` | `claude-code-desktop` (builds 2.42+; builds antigos: `claude-code`) |
+| Claude Desktop, aba Code | `claude-code-desktop` | `claude-code-desktop` (Claude Code ≥ 2.42, verificado com o Desktop 2.42304; builds antigos: `claude-code`) |
 | `claude` no terminal | `claude-code` | `claude-code` |
 
 > O próprio Claude Code define o `service.name` da telemetria nativa; nos builds atuais o Desktop já aparece como `claude-code-desktop`. O `terminal.type` não ajuda (é `non-interactive` tanto no Desktop quanto em `claude -p`). Use `in(service.name, {"claude-code", "claude-code-desktop"})` nas queries; para builds antigos, o [docs/dql-examples.md](docs/dql-examples.md) mostra o join com os spans do hook pelo id da sessão.
@@ -152,7 +170,7 @@ Rodar o instalador de novo é seguro: ele atualiza a configuração, mantém hoo
 
 | Caminho | Conteúdo |
 |---|---|
-| `~/.claude/otel-hook.py` | Hook (upstream v1.7.0 + patch de `service.name` para o Desktop) |
+| `~/.claude/otel-hook.py` | Hook (upstream v1.7.0 + dois patches pequenos, em [hooks/otel-hook.patch](hooks/otel-hook.patch): `service.name = claude-code-desktop` quando `CLAUDE_CODE_ENTRYPOINT=claude-desktop`, e limpeza do prompt — remove blocos `<system-reminder>` e desembrulha `<pasted_content>` — antes de gravar o texto) |
 | `~/.claude/settings.json` | 4 entradas em `hooks` (mescladas, sem apagar hooks existentes; backup `.bak-<data>` a cada alteração); bloco `env` opcional |
 | `~/.claude/otel-attrs.json` | `os.type`, atributos customizados, `_capture_prompts`, `_collector_port` |
 | `~/.dt-ai-obs/` | binário do coletor, `otel-collector.yaml` renderizado (sem token), `config.env`, wrapper `run-collector.sh`/`.ps1`, `logs/collector.log` |
@@ -221,7 +239,7 @@ Mais exemplos (custo por squad/centro de custo, tool calls, erros de API, métri
 
 ## Telemetria nativa do Claude Code (opcional)
 
-O Claude Code exporta métricas (`claude_code.token.usage`, `claude_code.cost.usage`, sessões, linhas de código, commits, PRs) e eventos de log (`api_request`, `api_error`, `user_prompt`, `tool_result`) quando algumas variáveis de ambiente estão definidas. O coletor deste asset já tem pipelines de `metrics` e `logs` apontando para `/api/v2/otlp/v1/metrics` e `/v1/logs`.
+O Claude Code exporta métricas (`claude_code.token.usage`, `claude_code.cost.usage`, sessões, linhas de código, commits, PRs) e eventos de log (`api_request`, `api_error`, `user_prompt`, `tool_result`, `tool_decision`) quando algumas variáveis de ambiente estão definidas. O coletor deste asset já tem pipelines de `metrics` e `logs` apontando para `/api/v2/otlp/v1/metrics` e `/v1/logs`.
 
 - **Por usuário**: `install.sh --enable-native-otel` (ou `-EnableNativeOtel`) grava o bloco `env` no `~/.claude/settings.json`.
 - **Para a frota**: copie [managed-settings.example.json](managed-settings.example.json) para o caminho de managed settings, que o usuário não consegue sobrescrever:
@@ -234,13 +252,13 @@ O Claude Code exporta métricas (`claude_code.token.usage`, `claude_code.cost.us
 
 Os valores importantes: `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` e `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta` (o Dynatrace só aceita delta; o processador `cumulative_to_delta` do coletor é apenas rede de segurança) e `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318` (o coletor local — o token nunca entra na configuração do Claude).
 
-Detalhes: o `service.name` nativo é definido pelo Claude Code (`claude-code-desktop` no Desktop a partir do build 2.42, `claude-code` no CLI e em builds antigos); o corpo do log (`content` no Grail) é `claude_code.<evento>`, ex.: `claude_code.api_request`, e os registros entram pelo pipeline `logs:default` no bucket `default_logs`; o e-mail da conta Anthropic vai para `claude.account_email` e o `user.email` informado na instalação é gravado em todos os sinais; `OTEL_LOG_USER_PROMPTS` fica em `0` e, mesmo que alguém ligue, o coletor apaga o campo `prompt` enquanto a captura de prompts estiver desligada.
+Detalhes: o `service.name` nativo é definido pelo Claude Code (`claude-code-desktop` no Desktop a partir do build 2.42, `claude-code` no CLI e em builds antigos); o corpo do log (`content` no Grail) é `claude_code.<evento>`, ex.: `claude_code.api_request`, e os registros entram pelo pipeline `logs:default` no bucket `default_logs`; o e-mail da conta Anthropic vai para `claude.account_email` e o `user.email` informado na instalação é gravado em todos os sinais como atributo de *recurso* — o que significa que **`user.email`, `squad` e `cost_center` não são dimensões das métricas nativas** (`claude_code.token.usage`, `cost.usage`, `session.count` só trazem as dimensões do próprio Claude Code: `type`, `model`, `user.id`, `session.id`, …; verificado em tenant real: `timeseries … by: {user.email}` devolve `null`). A divisão por desenvolvedor vem dos spans do hook e dos eventos de log `api_request`, que carregam esses campos; gravar os atributos no nível do datapoint no coletor está planejado. `OTEL_LOG_USER_PROMPTS` fica em `0` e, mesmo que alguém ligue, o coletor apaga o campo `prompt` enquanto a captura de prompts estiver desligada.
 
 ---
 
 ## Dynatrace Evals (opcional)
 
-O [dt-evals](https://github.com/dynatrace-oss/dt-evals) (`@dynatrace-oss/dt-evals`, open source, alpha) pega spans `gen_ai.*` de produção, pede a um LLM "juiz" que avalie cada interação e grava o veredito de volta na tenant como bizevents. Os spans deste asset servem direto: cada turno do Claude Code é um span `gen_ai.operation.name == "chat"` com `gen_ai.prompt.0.content` / `gen_ai.completion.0.content` **quando a captura de prompts está ligada**. O script [evals/run-evals.sh](evals/run-evals.sh) (`evals\run-evals.ps1` no Windows) faz o papel dos comandos *Configurar Evals* / *Rodar Evals* da extensão VS Code: mesma lista de evaluators, mesmas opções de janela (`--since`) e amostragem (`--sample`), configuração gerada para o formato dos spans deste asset e confirmação `y/N` antes de qualquer coisa que custe dinheiro. Nada roda sozinho; o instalador só imprime os passos (`--enable-evals`).
+O [dt-evals](https://github.com/dynatrace-oss/dt-evals) (`@dynatrace-oss/dt-evals`, open source, alpha) pega spans `gen_ai.*` de produção, pede a um LLM "juiz" que avalie cada interação e grava o veredito de volta na tenant como bizevents. Os spans deste asset servem direto: cada turno do Claude Code é um span `gen_ai.operation.name == "chat"` com `gen_ai.prompt.0.content` / `gen_ai.completion.0.content` **quando a captura de prompts está ligada**. O script [evals/run-evals.sh](evals/run-evals.sh) (`evals\run-evals.ps1` no Windows — mesmas opções, ainda não validado de ponta a ponta) faz o papel dos comandos *Configurar Evals* / *Rodar Evals* da extensão VS Code: mesma lista de evaluators, mesmas opções de janela (`--since`) e amostragem (`--sample`), configuração gerada para o formato dos spans deste asset e confirmação `y/N` antes de qualquer coisa que custe dinheiro. Nada roda sozinho; o instalador só imprime os passos (`--enable-evals`).
 
 **O que é avaliado** — 15 métricas built-in, uma nota (0–1), um rótulo `pass`/`fail` e uma explicação por turno amostrado:
 
@@ -280,7 +298,7 @@ evals/run-evals.sh run --since 6h --sample 25 --metrics prompt-injection,pii-lea
 evals/run-evals.sh runs                                  # histórico local (~/.dt-eval/runs.json)
 ```
 
-Opções: `--since 30m|1h|6h|24h` (padrão `1h`), `--sample 10|25|50|100` (padrão `10`), `--metrics a,b,c|all` (padrão `prompt-injection,pii-leakage`; vários rodam numa passada via config gerada), `--provider`/`--model`, `--service claude-code|claude-code-desktop|both`, `--env-url` (padrão: derivada de `~/.dt-ai-obs/config.env`), `--store-evaluated-prompt`, `--config` (usar um `.dt-eval.yaml` próprio), `--dry-run`, `--yes`. A config gerada (`evals/.dt-eval.yaml`, sem segredos) restringe o escopo a `operationNames: [chat]`, `service.name` em `{claude-code, claude-code-desktop}` e mapeia `spanFields` para `gen_ai.prompt.0.content` / `gen_ai.completion.0.content`.
+Opções: `--since 30m|1h|6h|24h` (padrão `1h`), `--sample 10|25|50|100` (padrão `10`), `--metrics a,b,c|all` (padrão `prompt-injection,pii-leakage`; vários rodam numa passada via config gerada), `--provider`/`--model`, `--service claude-code|claude-code-desktop|both`, `--env-url` (padrão: derivada de `~/.dt-ai-obs/config.env`), `--store-evaluated-prompt`, `--config` (usar um `.dt-eval.yaml` próprio), `--concurrency N` (chamadas paralelas ao juiz; padrão do dt-evals 5), `--allow-no-capture` (roda mesmo com a captura desligada — nada a avaliar, serve para testar a pipeline), `--dry-run`, `--yes`. A config gerada (`evals/.dt-eval.yaml`, sem segredos) restringe o escopo a `operationNames: [chat]`, `service.name` em `{claude-code, claude-code-desktop}` e mapeia `spanFields` para `gen_ai.prompt.0.content` / `gen_ai.completion.0.content`.
 
 **Lendo os resultados** — bizevents com `event.type == "gen_ai.evaluation.result"`, um por turno × evaluator: `gen_ai.evaluation.name`, `gen_ai.evaluation.score.value` (0–1), `gen_ai.evaluation.score.label` (`pass`/`fail`), `gen_ai.evaluation.explanation`, `dt.eval.run_id`, `trace_id`/`span_id` (o turno do Claude Code), `gen_ai.request.model` (modelo **juiz**), `gen_ai.evaluation.input.request_model` (modelo Claude que respondeu).
 
@@ -309,13 +327,19 @@ Para ver por desenvolvedor/squad, faça join com os spans do hook por `trace_id`
 | `curl 127.0.0.1:13133` falha | Serviço parado | macOS: `launchctl print gui/$(id -u)/com.dynatrace.dt-ai-obs-claude`; Linux: `systemctl --user status dt-ai-obs-claude`; Windows: histórico da Tarefa Agendada. Leia `~/.dt-ai-obs/logs/collector.log` |
 | Instalador avisa que 4318/13133 estão ocupadas | Coletor da extensão VS Code (ou outro receiver) rodando | O hook segue a nova porta (`_collector_port`); ajuste `OTEL_EXPORTER_OTLP_ENDPOINT` para a telemetria nativa, ou pare o outro coletor e reinstale |
 | `Exporting failed` / 401 / 403 no log | Escopos do token ou host `.apps.` | Reinstale com token correto e endpoint `.live.` |
+| 401 no `collector.log` logo após instalar, com token novo e escopos certos | O prompt oculto (`read -s`) recebeu o token **duas vezes** ou com espaço (alguns terminais / gerenciadores de clipboard colam no Cmd-V *e* no Enter). O instalador só confere que o token não está vazio; uma checagem de formato está planejada | Confira o tamanho guardado — um token `dt0c01.` tem 96 caracteres (`dt0c01.` + 24 + `.` + 64): macOS `security find-generic-password -s dt-ai-obs-claude -w \| tr -d '\n' \| wc -c`; Linux `secret-tool lookup service dt-ai-obs-claude key ingest-token \| wc -c` ou `wc -c < ~/.dt-ai-obs/ingest-token`. Reinstale sem digitar: `DT_INGEST_TOKEN='dt0c01.…' ./install.sh --endpoint … --email … --non-interactive` |
+| Dashboard com tiles vazios, mas `fetch spans` traz dados | A variável `Modelo` do *Developers AI Usage* tem uma lista padrão fixa de ids de modelo e todo tile filtra `in(gen_ai.request.model, $Modelo)`; se os spans trazem outro modelo (ex.: `claude-sonnet-4-5`) nada aparece até marcá-lo | Abra o filtro `Modelo` e marque seus modelos (a query da variável lista só os modelos vistos no período do dashboard). Idem para `Provider` se `gen_ai.system` mudar |
 | 400 em `/v1/metrics` | Temporalidade cumulativa | Garanta `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta` (managed settings vencem as do usuário) |
 | Spans chegam, métricas/logs não | Telemetria nativa desligada ou sessão antiga | `python3 hooks/configure-hooks.py status`; reinicie o Claude Code |
 | Spans **e** métricas chegam, o `collector.log` mostra lotes `Logs` com HTTP 200 e sem `partialSuccess`, mas `fetch logs` não acha nada (nem por `session.id` ou `content`) | **Permissão de leitura no Grail**, não ingestão: os logs OTLP entram pelo pipeline `logs:default` no bucket `default_logs`. Se a política IAM do usuário que consulta não tem `storage:buckets:read` nesse bucket, os registros são gravados mas ficam invisíveis para ele — a ingestão responde sucesso e nada na UI explica. (O formato do registro está correto: variantes de body, `event.name`, timestamp e número de atributos foram testadas) | 1. `fetch dt.system.buckets \| filter dt.system.table == "logs"` — a coluna *has access* de `default_logs` tem de ser `true`. 2. `fetch logs, from:now()-2h \| summarize count(), by:{dt.system.bucket, dt.openpipeline.pipelines}` mostra onde estão os logs que você consegue ler. 3. No tenant: em Account Management → Identity & access → Groups → seu grupo → Permissions, adicione a política built-in **Read Logs** (ou uma custom `ALLOW storage:buckets:read WHERE storage:bucket-name = "default_logs";`) com escopo no ambiente e sem boundary. Se *has access* continuar `false` mesmo assim, procure uma instrução **`DENY storage:buckets:read WHERE storage:bucket-name = "default_logs"`** em alguma política ligada a um dos grupos do usuário (ex.: grupo de "acesso restrito a logs"): um DENY vence qualquer ALLOW, e a única correção é tirar o usuário desse grupo ou remover a instrução. **Ou** crie em OpenPipeline → Logs uma regra de roteamento `matchesValue(service.name, "claude-code*")` para um pipeline cujo estágio de storage grava num bucket legível (ex.: `claude_code_logs`). Reverifique com [docs/dql-examples.md](docs/dql-examples.md#native-logs-health-check) |
 | Nenhum span | Python ausente ou sessões abertas antes da instalação | `python3 --version`; reinicie o Claude Code; teste `echo '{"hook_event_name":"Stop","session_id":"x"}' \| python3 ~/.claude/otel-hook.py; echo $?` (deve ser 0) |
 | `user.email` vazio | Instalado sem `--email` | Reinstale com `--email` |
-| Linux: `secret-tool` funciona no terminal mas o serviço não lê o token | Sem sessão D-Bus para o `systemd --user` | Reinstale numa sessão gráfica ou use o fallback de arquivo 0600 |
+| Texto de prompt visível no Dynatrace | Instalado com `--capture-prompts` | Reinstale sem a flag (o coletor volta a redigir) |
+| macOS: o Keychain pede senha quando o serviço sobe | Item criado por outra ferramenta | `security delete-generic-password -s dt-ai-obs-claude` e reinstale (o CLI `security` precisa ser o criador do item) |
+| Linux: `secret-tool` funciona no terminal mas o serviço não lê o token | Sem sessão D-Bus para o `systemd --user` | Reinstale numa sessão gráfica ou passe para o fallback de arquivo à mão. O instalador não tem flag para isso: ele escolhe o backend sozinho (Keychain no macOS → `secret-tool` → arquivo `~/.dt-ai-obs/ingest-token` modo 0600 quando nenhum keyring responde). Para forçar o arquivo: `umask 077; printf '%s' "$TOKEN" > ~/.dt-ai-obs/ingest-token; chmod 0600 ~/.dt-ai-obs/ingest-token`, ajuste `TOKEN_BACKEND=file` em `~/.dt-ai-obs/config.env` e rode `systemctl --user restart dt-ai-obs-claude` |
 | Spans do Desktop aparecem como `claude-code` | A extensão VS Code sobrescreveu `~/.claude/otel-hook.py` | Reinstale (os dois gravam o mesmo arquivo; o último vence). O dashboard funciona dos dois jeitos |
+| Camada 3: o workflow termina bem mas `events: 0` para hoje | `usage_report/messages` só devolve buckets fechados (hoje = buckets de 1 h, visíveis quando a hora fecha); `usage_report/claude_code` é agregado diário com ~1 h de atraso | Espere a próxima execução ou rode `dtctl exec workflow <id>` mais tarde; ver [connector/README.md § Freshness and caveats](connector/README.md#freshness-and-caveats) (EN) |
+| Camada 3: log da task mostra `HTTP 401` de `api.anthropic.com` | Tipo de chave errado para a org (Admin key em org Enterprise ou vice-versa) ou chave revogada | Crie a chave que o tipo de org exige e atualize a credencial no vault; ver [connector/README.md § Which organization type needs which key](connector/README.md#which-organization-type-needs-which-key) (EN) |
 
 ---
 
@@ -346,7 +370,7 @@ dt-ai-observability-claude/
 ├── install.sh / uninstall.sh          macOS e Linux
 ├── install.ps1 / uninstall.ps1        Windows
 ├── hooks/
-│   ├── otel-hook.py                   hook (upstream v1.7.0 + patch service.name)
+│   ├── otel-hook.py                   hook (upstream v1.7.0 + patches service.name e limpeza de prompt)
 │   ├── otel-hook.patch                o diff aplicado
 │   ├── upstream/otel-hook.py          cópia literal do HOOK_SCRIPT da extensão VS Code
 │   └── configure-hooks.py             mescla/remove hooks, otel-attrs.json, env nativo
@@ -371,7 +395,10 @@ dt-ai-observability-claude/
 
 ## Privacidade e segurança
 
-- **Sem conteúdo de prompts por padrão** — o hook só envia conteúdo com `_capture_prompts: "true"`, e o coletor apaga `gen_ai.prompt*`, `gen_ai.completion*`, `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions` e o campo `prompt` dos logs nativos antes de qualquer envio. Ficam apenas metadados (modelo, tokens, custo, nomes de ferramentas e entrada/saída das tool calls do hook).
+- **Sem conteúdo de prompts por padrão** — o hook só envia conteúdo com `_capture_prompts: "true"`, e o coletor apaga `gen_ai.prompt*`, `gen_ai.completion*`, `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions` e o campo `prompt` dos logs nativos antes de qualquer envio. Ficam apenas metadados (modelo, tokens, custo, nomes de ferramentas). Ligar a captura exige `install.sh --capture-prompts`: a flag grava `_capture_prompts: "true"` no `otel-attrs.json` **e** renderiza o coletor sem o processador `transform/redact_content`; editar só o JSON não basta.
+- **Entrada e saída das tools são sempre enviadas** — cada span `claude.tool.<nome>` carrega `claude.tool_input` e `claude.tool_response` (primeiros 4 KiB de cada: comandos de shell, caminhos e conteúdo de arquivos lidos ou gravados pelo Claude Code), **independentemente de `--capture-prompts`**; a redação do coletor cobre apenas os atributos `gen_ai.*` de prompt/resposta. Uma opção de redação para esses dois atributos está planejada; até lá, para descartá-los, acrescente `- delete_key(attributes, "claude.tool_input")` e `- delete_key(attributes, "claude.tool_response")` às statements de span do `transform/redact_content` em `~/.dt-ai-obs/otel-collector.yaml` e reinicie o serviço (a edição se perde quando o instalador renderiza a config de novo, e esse processador sai da pipeline quando a captura está ligada).
+- **Evals são opt-in e nunca automáticos** — o [Dynatrace Evals](#dynatrace-evals-opcional) só funciona com a captura ligada, pergunta antes de cada execução paga e é o único caminho em que texto de prompt (mascarado) sai da tenant: para o provedor de LLM juiz que você configurar. Os resultados voltam para a mesma tenant sem o texto avaliado, salvo `--store-evaluated-prompt`.
+- **Sem override por workspace** — hooks e atributos ficam em arquivos do usuário; o `.claude/settings.json` de um repositório não muda o endpoint nem religa a captura de conteúdo. Managed settings (do admin) prevalecem sobre as do usuário para o env do OTel nativo.
 - **Token fora de texto plano** — Keychain / Secret Service / DPAPI; o wrapper injeta o token como variável de ambiente apenas no processo do coletor. O YAML renderizado e o `config.env` (modo 0600) não contêm o token.
 - **Somente loopback** — receivers OTLP e health check em `127.0.0.1`; saída apenas HTTPS para o tenant.
 - **Binário verificável** — baixado de [open-telemetry/opentelemetry-collector-releases](https://github.com/open-telemetry/opentelemetry-collector-releases) com checagem SHA-256; versão fixável e instalação a partir de tarball local para ambientes isolados.

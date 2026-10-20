@@ -44,10 +44,19 @@ setup_instructions: >
   open-source dt-evals CLI (prompt injection, PII leakage, ...) using an LLM
   judge; it is opt-in, asks before every paid run and writes results back to
   the tenant as gen_ai.evaluation.result bizevents.
-  For the official cost layer, store the Anthropic Analytics or Admin API key
-  as a Token credential (AppEngine scope) in the Credential vault and run
-  connector/deploy/deploy.sh --org-type enterprise|console|team --yes with a
-  dtctl context on the tenant; see connector/README.md.
+  For the official cost layer (connector/), get the Anthropic Analytics API key
+  (Enterprise org, primary owner) or Admin API key (Console org, admin), export
+  it as ANTHROPIC_USAGE_KEY in the shell that runs deploy.sh and run
+  connector/deploy/deploy.sh --org-type enterprise|console|team --run-now --yes
+  with a dtctl context on the tenant: it adds api.anthropic.com to the
+  JS-runtime outbound allowlist, stores the key as a Token credential (AppEngine
+  scope) in the Credential vault, applies and runs the scheduled workflow. With
+  an OAuth dtctl context create the vault entry in the UI (name "Anthropic
+  <org_type> usage API key") and pass --skip-vault. Then import
+  connector/dashboard/claude-usage-dashboard.upload.json (Dashboards -> Upload);
+  deploy.sh does not import dashboards. Team plans have no API: run
+  connector/csv-import/import_team_spend.py on the exported spend CSV instead.
+  See connector/README.md.
 related_assets:
   - /integrations/application/dt-ai-observability-vscode
   - /apps/application/ai-observability-3-0

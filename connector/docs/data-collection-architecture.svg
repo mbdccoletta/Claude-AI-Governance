@@ -1,210 +1,195 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 820" width="1240" height="820" font-family="Inter, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" width="1400" height="900" font-family="Helvetica, Arial, sans-serif">
   <defs>
-    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4f9cf9"/></marker>
-    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2e9e6a"/></marker>
-    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b7791f"/></marker>
-    <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa0a6"/></marker>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa0a6"/></marker>
+    <marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4f9cf9"/></marker>
+    <marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2e9e6a"/></marker>
+    <marker id="mo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d9962b"/></marker>
   </defs>
   <style>
     .lane { fill:#1b1b22; stroke:#2b2b33; }
-    .title { fill:#fff; font-size:20px; font-weight:700; }
-    .sub { fill:#b3b7bd; font-size:12px; }
-    .lanet { fill:#fff; font-size:13px; font-weight:700; }
-    .box { fill:#24242c; stroke:#3a3a44; stroke-width:1; rx:8; }
-    .b1 { fill:#1e2633; stroke:#4f9cf9; stroke-width:1.2; rx:8; }
-    .b2 { fill:#1f2a24; stroke:#2e9e6a; stroke-width:1.2; rx:8; }
-    .b3 { fill:#2a2420; stroke:#b7791f; stroke-width:1.2; rx:8; }
-    .bx { fill:#2a2022; stroke:#c0392b; stroke-width:1.2; rx:8; }
-    .h { fill:#fff; font-size:12.5px; font-weight:700; }
-    .t { fill:#cfd3d8; font-size:11px; }
-    .tag { font-size:10.5px; font-weight:700; }
-    .l1 { stroke:#4f9cf9; stroke-width:1.6; fill:none; marker-end:url(#a1); }
-    .l2 { stroke:#2e9e6a; stroke-width:1.6; fill:none; marker-end:url(#a2); }
-    .l3 { stroke:#b7791f; stroke-width:1.6; fill:none; marker-end:url(#a3); }
-    .l4 { stroke:#9aa0a6; stroke-width:1.4; fill:none; marker-end:url(#a4); }
-    .leg { fill:#b3b7bd; font-size:11px; }
+    .title { fill:#fff; font-size:26px; font-weight:700; }
+    .sub { fill:#b3b7bd; font-size:14px; }
+    .lanet { fill:#fff; font-size:16px; font-weight:700; letter-spacing:1px; }
+    .box { fill:#24242c; stroke:#3a3a44; stroke-width:1; rx:12; }
+    .bb { fill:#1e2633; stroke:#4f9cf9; stroke-width:1.6; rx:12; }
+    .bg { fill:#1f2a24; stroke:#2e9e6a; stroke-width:1.6; rx:12; }
+    .bo { fill:#2a2420; stroke:#d9962b; stroke-width:1.6; rx:12; }
+    .bx { fill:#2a2022; stroke:#c0392b; stroke-width:1.4; rx:12; }
+    .h { fill:#fff; font-size:15px; font-weight:700; }
+    .t { fill:#d7dadf; font-size:13px; }
+    .k { fill:#9aa0a6; font-size:12px; }
+    .ln { stroke:#9aa0a6; stroke-width:2; fill:none; marker-end:url(#m); }
+    .lb { stroke:#4f9cf9; stroke-width:2; fill:none; marker-end:url(#mb); }
+    .lg { stroke:#2e9e6a; stroke-width:2; fill:none; marker-end:url(#mg); }
+    .lo { stroke:#d9962b; stroke-width:2; fill:none; marker-end:url(#mo); }
   </style>
-  <rect width="1240" height="820" fill="#16161d"/>
-  <text x="24" y="34" class="title">dt-ai-observability-claude: como os dados são coletados</text>
-  <text x="24" y="54" class="sub">Três camadas, três fontes, um destino (Grail). Azul = camada 1 (hooks) · verde = camada 2 (OTel nativo do Claude Code) · âmbar = camada 3 (APIs oficiais da Anthropic). Cinza = consumo.</text>
+  <rect width="1400" height="900" fill="#16161d"/>
+  <text x="30" y="44" class="title">Como os dados são coletados</text>
+  <text x="30" y="68" class="sub">Azul = camada 1 (hooks) · verde = camada 2 (OTel nativo do Claude Code) · âmbar = camada 3 (APIs oficiais da Anthropic) · cinza = consumo</text>
 
-  <!-- Column headers -->
-  <text x="40" y="86" class="lanet">ONDE O USO ACONTECE</text>
-  <text x="360" y="86" class="lanet">COMO CAPTURAMOS</text>
-  <text x="700" y="86" class="lanet">DYNATRACE (tenant)</text>
-  <text x="1010" y="86" class="lanet">O QUE SE VÊ</text>
+  <!-- column headers -->
+  <text x="48" y="104" class="lanet">ONDE O USO ACONTECE</text>
+  <text x="398" y="104" class="lanet">COMO CAPTURAMOS</text>
+  <text x="768" y="104" class="lanet">DYNATRACE (GRAIL)</text>
+  <text x="1098" y="104" class="lanet">O QUE SE VÊ</text>
 
-  <!-- Sources -->
-  <rect x="24" y="96" width="290" height="92" class="box"/>
-  <text x="36" y="116" class="h">Máquina do desenvolvedor</text>
-  <text x="36" y="134" class="t">Claude Desktop (Code tab) · claude CLI · VS Code / Cursor</text>
-  <text x="36" y="150" class="t">O Claude Code expõe hooks (eventos) e, com</text>
-  <text x="36" y="164" class="t">CLAUDE_CODE_ENABLE_TELEMETRY=1, exporta OTel nativo</text>
-  <text x="36" y="180" class="t" fill="#4f9cf9">camada 1 + camada 2</text>
+  <!-- column 1: sources -->
+  <rect x="48" y="118" width="310" height="118" class="bb"/>
+  <text x="62" y="142" class="h">Máquina do desenvolvedor</text>
+  <text x="62" y="166" class="t">• Claude Desktop (Code tab), claude CLI,</text>
+  <text x="62" y="184" class="t">  VS Code ou Cursor</text>
+  <text x="62" y="204" class="t">• Hooks do Claude Code (eventos)</text>
+  <text x="62" y="224" class="t">• OTel nativo quando habilitado</text>
 
-  <rect x="24" y="200" width="290" height="70" class="box"/>
-  <text x="36" y="220" class="h">Claude Code na web (nuvem Anthropic)</text>
-  <text x="36" y="238" class="t">Sem acesso ao collector local; OTel nativo só se o</text>
-  <text x="36" y="252" class="t">ambiente cloud tiver as variáveis OTEL_* (protobuf direto)</text>
-  <text x="36" y="266" class="t" fill="#2e9e6a">camada 2 (opcional) · camada 3</text>
+  <rect x="48" y="250" width="310" height="96" class="bg"/>
+  <text x="62" y="274" class="h">Claude Code na web (nuvem)</text>
+  <text x="62" y="298" class="t">• Sem acesso ao collector local</text>
+  <text x="62" y="318" class="t">• OTel nativo direto, se o ambiente</text>
+  <text x="62" y="336" class="t">  cloud tiver as variáveis OTEL_*</text>
 
-  <rect x="24" y="282" width="290" height="92" class="box"/>
-  <text x="36" y="302" class="h">claude.ai: chat, Cowork, Design, Claude Code web</text>
-  <text x="36" y="320" class="t">Nenhum hook, nenhum OTel. Só a fonte oficial:</text>
-  <text x="36" y="334" class="t">Enterprise → Analytics API (por usuário, por produto)</text>
-  <text x="36" y="348" class="t">Team → CSV de gastos (manual) · Pro/Max pessoal → nada</text>
-  <text x="36" y="366" class="t" fill="#b7791f">camada 3</text>
+  <rect x="48" y="360" width="310" height="118" class="bo"/>
+  <text x="62" y="384" class="h">claude.ai: chat, Cowork, Design</text>
+  <text x="62" y="408" class="t">• Nenhum hook, nenhum OTel</text>
+  <text x="62" y="428" class="t">• Enterprise: Analytics API por usuário</text>
+  <text x="62" y="448" class="t">• Team: CSV de gastos (manual)</text>
+  <text x="62" y="468" class="t">• Pro / Max pessoal: sem fonte</text>
 
-  <rect x="24" y="386" width="290" height="70" class="box"/>
-  <text x="36" y="406" class="h">Org do Claude Console (API / Platform)</text>
-  <text x="36" y="424" class="t">Admin API: usage_report/claude_code (por usuário)</text>
-  <text x="36" y="438" class="t">e usage_report/messages (API por workspace)</text>
-  <text x="36" y="452" class="t" fill="#b7791f">camada 3</text>
+  <rect x="48" y="492" width="310" height="96" class="bo"/>
+  <text x="62" y="516" class="h">Org do Claude Console (API)</text>
+  <text x="62" y="540" class="t">• Admin API: Claude Code por usuário</text>
+  <text x="62" y="560" class="t">• Admin API: uso de API por workspace</text>
+  <text x="62" y="580" class="t">• Sem claude.ai nesse tipo de org</text>
 
-  <rect x="24" y="468" width="290" height="44" class="bx"/>
-  <text x="36" y="488" class="h">Fora de alcance</text>
-  <text x="36" y="504" class="t">Claude via Amazon Bedrock / Vertex / Foundry (usar billing da nuvem)</text>
+  <rect x="48" y="602" width="310" height="60" class="bx"/>
+  <text x="62" y="626" class="h">Fora de alcance</text>
+  <text x="62" y="648" class="t">• Claude via Bedrock, Vertex ou Foundry</text>
 
-  <!-- Capture -->
-  <rect x="344" y="96" width="320" height="100" class="b1"/>
-  <text x="356" y="116" class="h">Camada 1 · hook ~/.claude/otel-hook.py (Python)</text>
-  <text x="356" y="134" class="t">UserPromptSubmit → Stop: 1 span "chat &lt;modelo&gt;" por turno</text>
-  <text x="356" y="148" class="t">PreToolUse → PostToolUse: 1 span por tool call (input/output)</text>
-  <text x="356" y="162" class="t">tokens lidos do JSONL da sessão (input+cache, output), custo se informado</text>
-  <text x="356" y="176" class="t">prompt/resposta só com --capture-prompts · atributos: e-mail, squad, cost_center</text>
-  <text x="356" y="190" class="t">envia OTLP/JSON para 127.0.0.1:4318</text>
+  <!-- column 2: capture -->
+  <rect x="398" y="118" width="330" height="140" class="bb"/>
+  <text x="412" y="142" class="h">Camada 1 · hook otel-hook.py</text>
+  <text x="412" y="166" class="t">• 1 span "chat" por turno (prompt → resposta)</text>
+  <text x="412" y="186" class="t">• 1 span por tool call, com input e output</text>
+  <text x="412" y="206" class="t">• Tokens lidos do JSONL da sessão</text>
+  <text x="412" y="226" class="t">• Prompt e resposta só com --capture-prompts</text>
+  <text x="412" y="246" class="t">• Envia OTLP/JSON para 127.0.0.1:4318</text>
 
-  <rect x="344" y="208" width="320" height="86" class="b2"/>
-  <text x="356" y="228" class="h">Camada 2 · OTel nativo do Claude Code</text>
-  <text x="356" y="246" class="t">métricas: claude_code.token.usage (input/output/cacheRead/cacheCreation),</text>
-  <text x="356" y="260" class="t">claude_code.cost.usage, session.count, lines_of_code, commits</text>
-  <text x="356" y="274" class="t">logs: api_request (tokens + cost_usd por chamada), user_prompt,</text>
-  <text x="356" y="288" class="t">tool_decision, tool_result · delta a cada 10 s / 5 s → 127.0.0.1:4318</text>
+  <rect x="398" y="272" width="330" height="140" class="bg"/>
+  <text x="412" y="296" class="h">Camada 2 · OTel nativo do Claude Code</text>
+  <text x="412" y="320" class="t">• Métricas: tokens por tipo, custo, sessões,</text>
+  <text x="412" y="338" class="t">  linhas de código, commits</text>
+  <text x="412" y="358" class="t">• Logs: api_request (tokens + custo por</text>
+  <text x="412" y="376" class="t">  chamada), user_prompt, tool_decision…</text>
+  <text x="412" y="398" class="t">• Export a cada 10 s / 5 s → 127.0.0.1:4318</text>
 
-  <rect x="344" y="306" width="320" height="86" class="box"/>
-  <text x="356" y="326" class="h">Collector OTel local (otelcol-contrib, serviço de usuário)</text>
-  <text x="356" y="344" class="t">receptor OTLP 4318 · processadores: redação de prompts (se off),</text>
-  <text x="356" y="358" class="t">resource (user.email, squad, cost_center, deployment.environment),</text>
-  <text x="356" y="372" class="t">normalização do e-mail nativo → claude.account_email, batch</text>
-  <text x="356" y="386" class="t">exporter otlp_http → https://&lt;tenant&gt;.live.dynatrace.com/api/v2/otlp</text>
+  <rect x="398" y="426" width="330" height="140" class="box"/>
+  <text x="412" y="450" class="h">Collector OTel local (serviço do usuário)</text>
+  <text x="412" y="474" class="t">• Receptor OTLP só em loopback (4318)</text>
+  <text x="412" y="494" class="t">• Remove prompts quando captura está off</text>
+  <text x="412" y="514" class="t">• Adiciona e-mail, squad, cost center</text>
+  <text x="412" y="534" class="t">• Exporta por HTTPS: traces, metrics, logs</text>
+  <text x="412" y="554" class="k">  https://TENANT.live.dynatrace.com/api/v2/otlp</text>
 
-  <rect x="344" y="404" width="320" height="108" class="b3"/>
-  <text x="356" y="424" class="h">Camada 3 · Workflow "Claude usage connector" (no tenant)</text>
-  <text x="356" y="442" class="t">agendado 15:00 UTC · 4 tasks Run JavaScript · org_type gate</text>
-  <text x="356" y="456" class="t">chave da Anthropic lida do Credential vault pelo nome</text>
-  <text x="356" y="470" class="t">fetch api.anthropic.com (allowlist) · 60 req/min, backoff, cursor fixo</text>
-  <text x="356" y="484" class="t">Enterprise 10 dias (revisões) · Console 3 dias (1d + horas de hoje)</text>
-  <text x="356" y="498" class="t">Team: csv-import/import_team_spend.py (manual) · tudo vira bizevents</text>
+  <rect x="398" y="580" width="330" height="160" class="bo"/>
+  <text x="412" y="604" class="h">Camada 3 · Workflow no tenant</text>
+  <text x="412" y="628" class="t">• Todo dia 15:00 UTC, 4 tasks JavaScript</text>
+  <text x="412" y="648" class="t">• Chave lida do Credential vault pelo nome</text>
+  <text x="412" y="668" class="t">• Enterprise: 10 dias (revisões de custo)</text>
+  <text x="412" y="688" class="t">• Console: 3 dias (1d passado + horas de hoje)</text>
+  <text x="412" y="708" class="t">• 60 req/min, backoff, cursor fixo</text>
+  <text x="412" y="728" class="t">• Team: importador CSV (manual)</text>
 
-  <!-- Dynatrace -->
-  <rect x="694" y="96" width="290" height="60" class="box"/>
-  <text x="706" y="116" class="h">OTLP ingest · /api/v2/otlp/v1/{traces,metrics,logs}</text>
-  <text x="706" y="134" class="t">token: openTelemetryTrace.ingest + metrics.ingest + logs.ingest</text>
-  <text x="706" y="148" class="t">OpenPipeline → buckets default_* (ver permissões IAM)</text>
+  <!-- column 3: Dynatrace -->
+  <rect x="768" y="118" width="300" height="96" class="box"/>
+  <text x="782" y="142" class="h">OTLP ingest</text>
+  <text x="782" y="166" class="t">• Token: openTelemetryTrace.ingest,</text>
+  <text x="782" y="184" class="t">  metrics.ingest, logs.ingest</text>
+  <text x="782" y="204" class="t">• OpenPipeline → buckets default_*</text>
 
-  <rect x="694" y="168" width="290" height="52" class="b1"/>
-  <text x="706" y="188" class="h">Grail · spans (gen_ai.*)</text>
-  <text x="706" y="206" class="t">service.name claude-code-desktop | claude-code · AI Obs app</text>
+  <rect x="768" y="228" width="300" height="76" class="bb"/>
+  <text x="782" y="252" class="h">Spans gen_ai.*</text>
+  <text x="782" y="276" class="t">• service.name claude-code-desktop</text>
+  <text x="782" y="294" class="t">  ou claude-code</text>
 
-  <rect x="694" y="232" width="290" height="52" class="b2"/>
-  <text x="706" y="252" class="h">Grail · métricas claude_code.* e logs de eventos</text>
-  <text x="706" y="270" class="t">event.name api_request, user_prompt, tool_* (sem prefixo)</text>
+  <rect x="768" y="318" width="300" height="96" class="bg"/>
+  <text x="782" y="342" class="h">Métricas e logs nativos</text>
+  <text x="782" y="366" class="t">• claude_code.token.usage, cost.usage</text>
+  <text x="782" y="386" class="t">• Eventos: api_request, user_prompt,</text>
+  <text x="782" y="404" class="t">  tool_decision (sem prefixo)</text>
 
-  <rect x="694" y="296" width="290" height="96" class="box"/>
-  <text x="706" y="316" class="h">Pré-requisitos no tenant</text>
-  <text x="706" y="334" class="t">app AI &amp; LLM Observability (Hub) · token de ingest</text>
-  <text x="706" y="348" class="t">Credential vault: Token, escopo AppEngine, acesso sem app context</text>
-  <text x="706" y="362" class="t">allowlist de saída do JS runtime: api.anthropic.com</text>
-  <text x="706" y="376" class="t">IAM: leitura dos buckets (cuidado com DENY em grupos de teste)</text>
-  <text x="706" y="390" class="t">dtctl com contexto OAuth para o deploy automatizado</text>
+  <rect x="768" y="428" width="300" height="138" class="box"/>
+  <text x="782" y="452" class="h">Pré-requisitos no tenant</text>
+  <text x="782" y="476" class="t">• App AI &amp; LLM Observability</text>
+  <text x="782" y="496" class="t">• Token de ingest (3 escopos)</text>
+  <text x="782" y="516" class="t">• Credential vault: Token, AppEngine</text>
+  <text x="782" y="536" class="t">• Allowlist de saída: api.anthropic.com</text>
+  <text x="782" y="556" class="t">• IAM: leitura dos buckets de logs</text>
 
-  <rect x="694" y="404" width="290" height="108" class="b3"/>
-  <text x="706" y="424" class="h">Grail · bizevents claude.usage.daily</text>
-  <text x="706" y="442" class="t">1 evento por usuário × produto × modelo × dia × fonte</text>
-  <text x="706" y="456" class="t">user.email, product, model, tokens.*, requests, cost_usd,</text>
-  <text x="706" y="470" class="t">source (enterprise_api | console_api | team_csv), usage.date,</text>
-  <text x="706" y="484" class="t">dedup.key = sha256(email|product|model|date|source)</text>
-  <text x="706" y="498" class="t">append-only → sempre: dedup dedup.key, sort: {timestamp desc}</text>
+  <rect x="768" y="580" width="300" height="160" class="bo"/>
+  <text x="782" y="604" class="h">Bizevents claude.usage.daily</text>
+  <text x="782" y="628" class="t">• 1 evento por usuário × produto ×</text>
+  <text x="782" y="646" class="t">  modelo × dia × fonte</text>
+  <text x="782" y="666" class="t">• user.email, product, model, tokens,</text>
+  <text x="782" y="684" class="t">  requests, cost_usd, usage.date</text>
+  <text x="782" y="704" class="t">• dedup.key: hash dos cinco campos</text>
+  <text x="782" y="724" class="t">• Append-only → sempre usar dedup</text>
 
-  <!-- Consumption -->
-  <rect x="1004" y="96" width="212" height="80" class="box"/>
-  <text x="1016" y="116" class="h">AI &amp; LLM Observability</text>
-  <text x="1016" y="134" class="t">Prompts stream, conversas,</text>
-  <text x="1016" y="148" class="t">tool calls, latência por modelo</text>
-  <text x="1016" y="164" class="t" fill="#4f9cf9">spans (camada 1)</text>
+  <!-- column 4: consumption -->
+  <rect x="1098" y="118" width="254" height="96" class="box"/>
+  <text x="1112" y="142" class="h">App AI Observability</text>
+  <text x="1112" y="166" class="t">• Prompts stream, conversas</text>
+  <text x="1112" y="186" class="t">• Tool calls, latência por modelo</text>
+  <text x="1112" y="206" class="k">  spans (camada 1)</text>
 
-  <rect x="1004" y="188" width="212" height="96" class="box"/>
-  <text x="1016" y="208" class="h">Dashboard Developers AI Usage</text>
-  <text x="1016" y="226" class="t">custo estimado, requests, sessões,</text>
-  <text x="1016" y="240" class="t">devs, modelos, cache hit, p50/p95,</text>
-  <text x="1016" y="254" class="t">por time / squad / cost center</text>
-  <text x="1016" y="272" class="t" fill="#2e9e6a">spans + métricas (camadas 1 e 2)</text>
+  <rect x="1098" y="228" width="254" height="96" class="box"/>
+  <text x="1112" y="252" class="h">Dashboard Developers AI Usage</text>
+  <text x="1112" y="276" class="t">• Custo, requests, sessões, devs</text>
+  <text x="1112" y="296" class="t">• Cache hit, p50 / p95, por time</text>
+  <text x="1112" y="316" class="k">  spans + métricas (camadas 1 e 2)</text>
 
-  <rect x="1004" y="296" width="212" height="96" class="box"/>
-  <text x="1016" y="316" class="h">Dashboard Claude usage (camada 3)</text>
-  <text x="1016" y="334" class="t">custo oficial por desenvolvedor,</text>
-  <text x="1016" y="348" class="t">por produto (chat, Claude Code,</text>
-  <text x="1016" y="362" class="t">Cowork, Design), top 10, frescor</text>
-  <text x="1016" y="380" class="t" fill="#b7791f">bizevents (camada 3)</text>
+  <rect x="1098" y="338" width="254" height="96" class="box"/>
+  <text x="1112" y="362" class="h">Dashboard Claude usage (oficial)</text>
+  <text x="1112" y="386" class="t">• Custo oficial por desenvolvedor</text>
+  <text x="1112" y="406" class="t">• Por produto, top 10, frescor</text>
+  <text x="1112" y="426" class="k">  bizevents (camada 3)</text>
 
-  <rect x="1004" y="404" width="212" height="108" class="box"/>
-  <text x="1016" y="424" class="h">Conciliação oficial × observado</text>
-  <text x="1016" y="442" class="t">dql/official-vs-observed-tokens.dql</text>
-  <text x="1016" y="456" class="t">join bizevents ⟷ logs api_request</text>
-  <text x="1016" y="470" class="t">por user.email e dia → cobertura %</text>
-  <text x="1016" y="484" class="t">da instrumentação e delta de custo</text>
-  <text x="1016" y="502" class="t" fill="#9aa0a6">camadas 2 + 3</text>
+  <rect x="1098" y="448" width="254" height="118" class="box"/>
+  <text x="1112" y="472" class="h">Conciliação oficial × observado</text>
+  <text x="1112" y="496" class="t">• Join bizevents ⟷ logs api_request</text>
+  <text x="1112" y="516" class="t">• Por usuário e dia</text>
+  <text x="1112" y="536" class="t">• Cobertura da instrumentação</text>
+  <text x="1112" y="556" class="k">  camadas 2 + 3</text>
 
-  <!-- arrows: sources -> capture -->
-  <path d="M314,130 L344,130" class="l1"/>
-  <path d="M314,160 C330,160 330,250 344,250" class="l2"/>
-  <path d="M314,235 C330,235 330,260 344,260" class="l2"/>
-  <path d="M314,330 C330,330 330,440 344,440" class="l3"/>
-  <path d="M314,420 L344,456" class="l3"/>
-  <!-- capture -> collector -> dynatrace -->
-  <path d="M504,196 L504,208" class="l1"/>
-  <path d="M504,294 L504,306" class="l2"/>
-  <path d="M664,350 C680,350 680,126 694,126" class="l4"/>
-  <path d="M839,156 L839,168" class="l1"/>
-  <path d="M839,220 L839,232" class="l2"/>
-  <path d="M664,458 L694,458" class="l3"/>
-  <!-- dynatrace -> consumption -->
-  <path d="M984,194 L1004,136" class="l1"/>
-  <path d="M984,258 L1004,236" class="l2"/>
-  <path d="M984,458 L1004,344" class="l3"/>
-  <path d="M984,470 L1004,458" class="l3"/>
-  <path d="M984,270 C996,270 996,470 1004,470" class="l2"/>
+  <rect x="1098" y="580" width="254" height="160" class="box"/>
+  <text x="1112" y="604" class="h">Dynatrace Evals (opcional)</text>
+  <text x="1112" y="628" class="t">• PII, prompt injection, toxicidade…</text>
+  <text x="1112" y="648" class="t">• Julga os spans com conteúdo</text>
+  <text x="1112" y="668" class="t">• Resultados como bizevents</text>
+  <text x="1112" y="688" class="t">• Chama um LLM juiz: custo e opt-in</text>
+  <text x="1112" y="708" class="k">  exige --capture-prompts</text>
 
-  <!-- Install process strip -->
-  <rect x="24" y="532" width="1192" height="150" class="lane" rx="10"/>
-  <text x="40" y="554" class="lanet">PROCESSO DE INSTALAÇÃO (detalhe em docs/installation-process.svg)</text>
-  <rect x="40" y="566" width="370" height="104" class="b1"/>
-  <text x="52" y="586" class="h">Por desenvolvedor · ./install.sh (macOS/Linux) · install.ps1 (Windows)</text>
-  <text x="52" y="604" class="t">1 hook + settings.json · 2 atributos (e-mail, squad, cost_center) · 3 collector</text>
-  <text x="52" y="618" class="t">(~100 MB) · 4 token no Keychain · 5 serviço de usuário · 6 OTel nativo (--enable-native-otel)</text>
-  <text x="52" y="632" class="t">7 validação: health 13133, log sem 401, fetch spans. Reiniciar sessões abertas.</text>
-  <text x="52" y="650" class="t">Pré-requisitos: Python 3, curl/tar, token de ingest, saída HTTPS para github.com e &lt;tenant&gt;.live</text>
-  <text x="52" y="664" class="t">Desinstalar: ./uninstall.sh · coexiste com a extensão VS Code (mesmo hook)</text>
-  <rect x="426" y="566" width="390" height="104" class="b3"/>
-  <text x="438" y="586" class="h">Por tenant · connector/deploy/deploy.sh --org-type &lt;tipo&gt; --yes (ou deploy_all.sh)</text>
-  <text x="438" y="604" class="t">1 allowlist api.anthropic.com (merge) · 2 credencial (vault; manual com OAuth) ·</text>
-  <text x="438" y="618" class="t">3 workflow via dtctl apply (id gravado) · 4 dashboards · 5 run-now + DQL de verificação</text>
-  <text x="438" y="632" class="t">Pré-requisitos: dtctl com login OAuth no tenant; chave Anthropic (Enterprise: primary</text>
-  <text x="438" y="646" class="t">owner → Analytics key; Console: admin → Admin key; Team: CSV); vault com escopo AppEngine</text>
-  <text x="438" y="664" class="t">Claude Code executa tudo via skill deploy-claude-usage-connector, exceto colar segredos</text>
-  <rect x="832" y="566" width="372" height="104" class="box"/>
-  <text x="844" y="586" class="h">Papéis</text>
-  <text x="844" y="604" class="t">Dev: roda o instalador na própria máquina (minutos, sem Docker, sem admin)</text>
-  <text x="844" y="618" class="t">Admin Dynatrace: token de ingest, vault, allowlist, IAM dos buckets, deploy.sh</text>
-  <text x="844" y="632" class="t">Admin Claude: gera a Admin key (Console) ou Analytics key (Enterprise, primary owner)</text>
-  <text x="844" y="650" class="t">Segredos nunca passam pelo chat nem pelo repositório: prompt oculto, Keychain, vault</text>
-  <text x="844" y="664" class="t">Conteúdo de prompts: off por padrão nas camadas 1 e 2; nunca existe na camada 3</text>
+  <!-- arrows -->
+  <path d="M358,177 L398,177" class="lb"/>
+  <path d="M358,200 C378,200 378,340 398,340" class="lg"/>
+  <path d="M358,298 C378,298 378,330 398,330" class="lg"/>
+  <path d="M563,258 L563,272" class="lb"/>
+  <path d="M563,412 L563,426" class="lg"/>
+  <path d="M728,496 C748,496 748,166 768,166" class="ln"/>
+  <path d="M918,214 L918,228" class="lb"/>
+  <path d="M918,304 L918,318" class="lg"/>
+  <path d="M358,420 C378,420 378,660 398,660" class="lo"/>
+  <path d="M358,540 C378,540 378,670 398,670" class="lo"/>
+  <path d="M728,660 L768,660" class="lo"/>
+  <path d="M1068,266 L1098,166" class="lb"/>
+  <path d="M1068,276 L1098,276" class="lb"/>
+  <path d="M1068,366 L1098,296" class="lg"/>
+  <path d="M1068,660 L1098,386" class="lo"/>
+  <path d="M1068,680 L1098,496" class="lo"/>
+  <path d="M1068,380 C1084,380 1084,516 1098,516" class="lg"/>
 
-  <!-- Legend -->
-  <rect x="24" y="698" width="1192" height="100" class="lane" rx="10"/>
-  <text x="40" y="720" class="lanet">O QUE CADA CAMADA RESPONDE</text>
-  <text x="40" y="740" class="leg"><tspan fill="#4f9cf9" font-weight="700">Camada 1 (hooks)</tspan>: o que aconteceu em cada conversa e tool call, em tempo real, com prompt opcional. Só nas máquinas instrumentadas; Desktop e CLI.</text>
-  <text x="40" y="758" class="leg"><tspan fill="#2e9e6a" font-weight="700">Camada 2 (OTel nativo)</tspan>: tokens e custo por chamada de API, sessões, linhas de código e commits, em segundos. Mesmas máquinas; também sessões web se o ambiente tiver as variáveis.</text>
-  <text x="40" y="776" class="leg"><tspan fill="#b7791f" font-weight="700">Camada 3 (oficial)</tspan>: quanto a Anthropic cobra por usuário e produto, diário, para toda a organização, inclusive claude.ai chat, Cowork, Design e Claude Code web. Não cobre planos pessoais nem Bedrock.</text>
-  <text x="40" y="792" class="leg">Verificado em tenant de laboratório em 2026-10-19: spans e métricas de uma máquina real, logs nativos (após remover um DENY de IAM), 1 evento real do Console, demo team_csv, três workflows e dois dashboards.</text>
+  <!-- legend -->
+  <rect x="30" y="764" width="1340" height="112" class="lane" rx="14"/>
+  <text x="48" y="790" class="lanet">O QUE CADA CAMADA RESPONDE</text>
+  <text x="48" y="814" class="t"><tspan fill="#4f9cf9" font-weight="700">Camada 1</tspan>: o que aconteceu em cada conversa e tool call, em tempo real. Só nas máquinas instrumentadas.</text>
+  <text x="48" y="836" class="t"><tspan fill="#2e9e6a" font-weight="700">Camada 2</tspan>: tokens e custo por chamada de API, sessões, linhas de código e commits, em segundos. Mesmas máquinas; web se configurado.</text>
+  <text x="48" y="858" class="t"><tspan fill="#d9962b" font-weight="700">Camada 3</tspan>: quanto a Anthropic cobra por usuário e produto, diário, para toda a organização. Não cobre planos pessoais nem Bedrock.</text>
 </svg>

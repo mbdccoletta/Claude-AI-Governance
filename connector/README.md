@@ -30,6 +30,9 @@ connector/
 
 Tenant prerequisites once (AI Obs app, ingest token, Anthropic key in the vault), then `install.sh` on each developer machine (layers 1+2)
 and `deploy/deploy.sh` once per tenant (layer 3). Amber steps are the only manual ones and always involve a secret the operator pastes.
+`deploy.sh` does four things — outbound allowlist, credential vault, workflow apply, optional run-now + verification DQL — and **does not
+deploy dashboards**: both dashboards (`../Dashboard/Developers AI Usage.json` and `dashboard/claude-usage-dashboard.upload.json`) are
+imported by hand with Dashboards → Upload or `dtctl apply -f` (see [Dashboard](#dashboard) below).
 
 ## Which organization type needs which key
 
@@ -49,6 +52,10 @@ Create a **Token** credential (Settings → Credential vault → Add new credent
 `Anthropic enterprise usage API key` or `Anthropic console usage API key` (or any name you then pass as workflow input `credential_name`),
 with Credential scope **AppEngine**, **Allow access without app context (Workflows)** ON and **Owner access only** ON (owner = workflow owner).
 The workflow looks the entry up by name at run time, so no id is needed; `credential_id` still works if you prefer it.
+Note the difference between the two paths: the UI path above uses *Owner access only* ON; `deploy.sh` (`vault_upsert.js`) creates or
+updates the entry with owner-access-only **off** (shared with all AppEngine consumers), because the dtctl actor is usually not the workflow
+owner. If you created the entry in the UI with owner-only ON and then run `deploy.sh` without `--skip-vault`, the update flips it to shared —
+set it back in the UI if your policy requires it.
 
 ### 2. Outbound allowlist
 Workflow tasks may only call allow-listed hosts. Add `api.anthropic.com` to
@@ -56,18 +63,22 @@ Workflow tasks may only call allow-listed hosts. Add `api.anthropic.com` to
 Relative `/platform/...` calls (bizevent ingest) need nothing.
 
 ### 3. Workflow
-Import `workflow/claude-usage-connector.json` (Workflows app → Upload, or `dtctl apply -f workflow/claude-usage-connector.json --write-id`)
+Import `workflow/claude-usage-connector.json` (Workflows app → Upload, or `dtctl apply -f workflow/claude-usage-connector.json` — note the
+returned id and put it in the JSON as `id` for later updates; dtctl's `--write-id` does not write the file back)
 and set the workflow **inputs**:
 
 | Input | Meaning | Default |
 |---|---|---|
 | `org_type` | `enterprise` \| `console` \| `team` — gates which task runs | `enterprise` |
-| `credential_id` | vault entry with the Anthropic key | — (required unless team) |
+| `credential_name` | vault entry name, used when `credential_id` is empty | `Anthropic <org_type> usage API key` |
+| `credential_id` | vault entry id (`CREDENTIALS_VAULT-…`) with the Anthropic key | — (optional when the entry is named as above; not needed for team) |
 | `org_id` | label copied to `org.id` | empty |
+| `anthropic_base_url` | Anthropic API base URL | `https://api.anthropic.com` |
 | `enterprise_lookback_days` | re-read window (revisions) | 10 |
 | `console_lookback_days` | days re-read for Console | 3 |
 | `console_include_api_usage` | also import org-level API usage as `product=api` | true |
 | `dry_run` | build events, log counts, ingest nothing | false |
+| `console_debug` | return the `usage_report/messages` bucket list the console task saw (no secrets) | false |
 
 Schedule: **daily 15:00 UTC** (Enterprise data for day D is normally complete by 13:00–13:30 UTC on D+1).
 The four tasks are `resolve_config` → (`enterprise_analytics` | `console_claude_code` | `team_reminder`), each gated by
@@ -104,7 +115,7 @@ See `dql/`:
 | `cost-per-developer-30d.dql` | cost, tokens, requests, active days per developer, last 30 days |
 | `tokens-by-product-model.dql` | token mix (input/output/cache) and cost per product × model |
 | `top10-developers-by-cost.dql` | top 10 developers with product split |
-| `official-vs-observed-tokens.dql` | layer 3 official daily tokens vs layer 2 real-time `event.name == "api_request"` logs, per developer per day → coverage % and USD delta |
+| `official-vs-observed-tokens.dql` | layer 3 official daily tokens (deduped, demo rows dropped, **all products** — not filtered to `claude_code`) vs layer 2 real-time `event.name == "api_request"` logs (any `service.name`), per developer per day → coverage % and USD delta. On Enterprise orgs the coverage is therefore diluted by chat / Cowork / Design rows, and the log side's day is computed in the query timezone while `usage.date` is a UTC day; tightening the filters is a follow-up |
 
 ## Dashboard
 

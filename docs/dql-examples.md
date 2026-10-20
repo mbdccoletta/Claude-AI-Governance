@@ -2,7 +2,9 @@
 
 All queries assume the default setup: hook spans (`service.name` = `claude-code-desktop`
 for the Claude Desktop app Code tab, `claude-code` for the CLI) plus, optionally, Claude
-Code's native OTel metrics and logs (`service.name` = `claude-code`).
+Code's native OTel metrics and logs (`service.name` = `claude-code-desktop` on Claude Code
+≥ 2.42 for the Desktop app — verified with Desktop 2.42304 — and `claude-code` on the CLI
+and on older builds).
 
 `user.email` is the address entered at install time and is present on every signal. On
 native metrics/logs the Anthropic account e-mail is kept as `claude.account_email`.
@@ -157,12 +159,20 @@ cacheCreation, plus `model`), `claude_code.cost.usage` (`model`), `claude_code.s
 `claude_code.lines_of_code.count` (`type` = added | removed), `claude_code.commit.count`,
 `claude_code.pull_request.count`, `claude_code.active_time.total`.
 
+> **`user.email`, `squad` and `cost_center` are not dimensions on these metrics.** The collector
+> stamps them as OTLP *resource* attributes; the datapoints carry only Claude Code's own
+> dimensions (`type`, `model`, `user.id`, `session.id`, …). Verified on a real tenant:
+> `timeseries … by: { user.email }` on `claude_code.*` returns `null`. The per-developer split
+> comes from the hook spans and from the `api_request` log events above, which do carry those
+> fields. Stamping the attributes at datapoint level in the collector is planned; until then
+> group the metrics by `model`, `type` or `user.id`.
+
 ```dql
-timeseries Tokens = sum(claude_code.token.usage), by: { `user.email`, type }, interval: 1h
+timeseries Tokens = sum(claude_code.token.usage), by: { type, model }, interval: 1h
 ```
 
 ```dql
-timeseries Cost_USD = sum(claude_code.cost.usage), by: { `user.email`, model }, interval: 1d
+timeseries Cost_USD = sum(claude_code.cost.usage), by: { model }, interval: 1d
 ```
 
 ## Health check: is data arriving?

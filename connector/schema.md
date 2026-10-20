@@ -50,7 +50,7 @@ implementation is identical in `workflow/lib/common.js` and `csv-import/import_t
 | Anthropic value | `product` |
 |---|---|
 | `chat`, `chat_cowork_unified`, `claude-tag`, `claude_in_chrome` | `chat` |
-| `claude_code` | `claude_code` |
+| `claude_code`, `claude code` | `claude_code` |
 | `cowork`, `office_agent` | `cowork` |
 | `claude_design`, `design` | `design` |
 | `api` (Console `usage_report/messages`) | `api` |
@@ -97,11 +97,13 @@ fetch bizevents, from: now() - 45d
   "usage.timestamp": "2026-10-18T00:00:00Z",
   "usage.complete": true,
   "org.id": "org_mock01",
-  "dedup.key": "b1ed2feece1edba0818373f9fb189f1a",
+  "dedup.key": "15ffabccbda0704d2a71f01d2ba32e89",
   "actor.type": "user_actor",
   "claude_code.sessions": 7,
   "claude_code.commits": 9
 }
 ```
+
+The example's `dedup.key` is `sha256("alice@example.com|claude_code|claude-opus-5-5|2026-10-18|console_api")[:32]`.
 
 Prompts, completions and file contents are never collected by this layer: the sources are aggregate billing/usage APIs.

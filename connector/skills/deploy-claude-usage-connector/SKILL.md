@@ -64,6 +64,9 @@ and read the entry, so the workflow input `credential_name` is enough — no id 
 Credential type **Token**, that exact **Name**, Credential scope **AppEngine** (leaves "Dynatrace apps with access" = All applications),
 toggle **Allow access without app context, for example, from ad hoc functions in Workflows** ON, **Owner access only** ON
 (the owner must be the workflow owner; the UI refuses the toggle ON + owner-only OFF + empty user list). Paste the Anthropic key in **Token**.
+The scripted path differs: `deploy/vault_upsert.js` creates/updates the entry with `ownerAccessOnly: false` (shared with all AppEngine
+consumers) because the dtctl actor is usually not the workflow owner. Running `deploy.sh` without `--skip-vault` on an entry created in the UI
+with owner-only ON flips it to shared; tell the user and let them set it back in the UI if their policy requires it.
 Claude must not type the key itself; it can fill every other field in the user's browser and let the user paste + Save.
 
 ## One-off runs with other inputs

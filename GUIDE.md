@@ -5,6 +5,42 @@ Versão 1.0.0 · Dynatrace Solutions Engineering LATAM
 
 ---
 
+## O que é medido onde
+
+| Por onde o dev usa o Claude | Tempo real na máquina (camadas 1 + 2) | Oficial da Anthropic (camada 3) |
+|---|---|---|
+| **Claude Desktop, aba Code** | ✅ conversas, tool calls, tokens, custo por chamada, prompts (opcional) | ✅ como `claude_code` (org Enterprise ou Console) |
+| **`claude` CLI no terminal** | ✅ idem (`service.name = claude-code`) | ✅ como `claude_code` |
+| **VS Code / Cursor** | ✅ mesmo hook (este instalador ou o asset VS Code) | ✅ como `claude_code` |
+| **Claude Code na web** (nuvem da Anthropic) | ⚠️ só métricas/logs nativos, se o ambiente cloud tiver as variáveis `OTEL_*` | ✅ como `claude_code` (remoto) |
+| **Cowork** (dentro do app Desktop) | ❌ sem hooks, sem OTel | ✅ como `cowork` (Enterprise) ou via CSV do Team |
+| **claude.ai chat, Design** | ❌ | ✅ como `chat` / `design` (Enterprise) ou via CSV do Team |
+| **Assinatura pessoal Pro / Max** | ✅ em máquina instrumentada | ❌ a Anthropic não expõe API para planos pessoais |
+| **Claude via Bedrock, Vertex, Foundry** | ✅ os hooks funcionam para Claude Code | ❌ usar o billing da nuvem |
+
+Regra prática: as camadas 1 + 2 respondem *o que está acontecendo agora e como* nas máquinas instrumentadas; a camada 3 responde *o que a Anthropic cobra da organização inteira*, incluindo produtos sem hook e quem não instalou nada. A query `dql/official-vs-observed-tokens.dql` cruza as duas.
+
+### Respostas rápidas
+
+- **Preciso de uma chave da Anthropic?** Só para a camada 3. As camadas 1 + 2 usam um token de ingest do Dynatrace e o login normal do Claude.
+- **O workflow é só para o claude.ai?** Não. Ele importa o uso oficial da org inteira: Claude Code (Desktop, CLI, web) mais chat, Cowork e Design quando a org é Enterprise; Claude Code e uso de API quando é org do Console.
+- **Funciona para Cowork?** Só pela camada 3 (chave Enterprise ou CSV do Team): tokens e custo diários por usuário. Cowork não tem hooks, então não há prompts nem tool calls.
+- **Por que vejo texto `<system-reminder>` nos prompts?** Não deveria mais: o hook remove os blocos que o app Desktop injeta. Spans antigos continuam com eles.
+- **Uso o Desktop com assinatura pessoal. O que ganho?** Tudo das camadas 1 + 2 na sua máquina; nada da camada 3.
+
+## Planos da Anthropic × APIs: o que existe (verificado na documentação da Anthropic em 2026-10-19)
+
+| Plano / organização Claude | API oficial de uso e custo | O que se obtém | Chave | Limitações |
+|---|---|---|---|---|
+| **Free, Pro, Max** (pessoal) | ❌ nenhuma | nada; só as camadas 1 + 2 em máquina instrumentada | — | a Anthropic não expõe dados por usuário de planos pessoais |
+| **Team** | ❌ sem API; exportação manual do **CSV de gastos** (claude.ai → Settings → Analytics) | por usuário × produto × modelo: requests, tokens de prompt/completion, gasto líquido e bruto; até 90 dias, atualização diária com 1 dia de atraso | — | sem divisão de tokens de cache; alguém precisa exportar e rodar o importador |
+| **Enterprise, por assento** | ⚠️ Analytics API: endpoints de engajamento sim; endpoints de custo/uso devolvem **créditos de uso**, não dólares | usuários ativos, sessões, projetos, skills, conectores; tokens por usuário | Analytics API key (só o primary owner) | custo não vem em USD |
+| **Enterprise, por uso** | ✅ Analytics API: `user_cost_report`, `user_usage_report`, `cost_report`, `usage_report` | por usuário × produto (chat, claude_code, cowork, claude_design, …) × modelo, diário: tokens, requests, USD | Analytics API key (só o primary owner, escopo `read:analytics`) | dados desde 2026-01-01; disponíveis ~4 h após o uso, revisados até ~7 dias após o fim do mês; 60 req/min por org |
+| **Org do Console / Claude Platform** (clientes de API) | ✅ Admin API: `usage_report/claude_code` (por usuário, diário), `usage_report/messages` (org/workspace, buckets de 1m a 1d), `cost_report` (org, diário) | Claude Code por usuário com modelo e custo estimado; tokens de API por workspace / chave / modelo; USD por workspace | Admin API key `sk-ant-admin01-…` (admin da org) | contas individuais (sem org) não têm Admin API; `messages` só devolve buckets fechados; Console na AWS não tem API de uso |
+| **Claude via Bedrock / Vertex / Foundry** | ❌ fora de todas as APIs da Anthropic | — | — | usar o billing da nuvem; os hooks continuam capturando sessões de Claude Code |
+
+Os tipos de chave não são intercambiáveis: uma Admin API key não chama a Analytics API do Enterprise e vice-versa. Uma organização que usa Claude Platform e Claude Enterprise precisa das duas chaves, e este asset roda um workflow por chave (`org_type = console` e `org_type = enterprise`).
+
 ## Credenciais necessárias
 
 | Você quer | Dynatrace | Anthropic | Quem cria |

@@ -110,7 +110,7 @@
   <text x="330" y="658" class="t">fonte oficial, todo dia às 15:00 UTC, via Workflow no tenant</text>
   <text x="840" y="658" class="t">o que a Anthropic cobra, inclusive quem não instalou nada</text>
 
-  <text x="62" y="680" class="k">Não coberto: planos pessoais Pro/Max no oficial · Claude via Amazon Bedrock, Vertex ou Foundry (usar o billing da nuvem)</text>
+  <text x="62" y="680" class="k">Planos: Pro/Max sem API oficial · Team só CSV manual · Enterprise por uso = API completa (por assento: créditos, sem USD) · Console = Admin API · Bedrock/Vertex: fora</text>
 
   <!-- COMO INSTALAR -->
   <rect x="30" y="706" width="1340" height="300" class="lane" rx="14"/>

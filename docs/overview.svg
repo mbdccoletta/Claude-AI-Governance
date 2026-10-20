@@ -96,7 +96,7 @@
 
   <text x="62" y="574" class="h" fill="#4f9cf9">VS Code / Cursor</text>
   <text x="330" y="574" class="t">extensão VS Code (asset irmão) ou este instalador: mesmo hook</text>
-  <text x="840" y="574" class="t">idem, mais GitHub Copilot Chat pela extensão</text>
+  <text x="840" y="574" class="t">idem (mesmo hook; extensão VS Code opcional)</text>
 
   <text x="62" y="602" class="h" fill="#2e9e6a">Claude Code na web (nuvem)</text>
   <text x="330" y="602" class="t">OTel nativo com variáveis OTEL_* no ambiente cloud (sem hook)</text>

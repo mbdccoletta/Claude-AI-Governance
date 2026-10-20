@@ -5,7 +5,7 @@ description: >
   without VS Code: the same Python hook and OpenTelemetry Collector used by the
   dt-ai-observability-vscode asset, packaged as a user service with the API
   token in the OS credential store, plus optional Claude Code native OTel
-  metrics and logs and the shared "Developers AI Usage" dashboard. Includes a
+  metrics and logs and a Claude-only "Developers AI Usage" dashboard. Includes a
   third layer, connector/: a Dynatrace Workflow (plus a Team-plan CSV importer)
   that imports Anthropic's official per-user daily usage and cost (Enterprise
   Analytics API, Console Admin API) as claude.usage.daily business events,

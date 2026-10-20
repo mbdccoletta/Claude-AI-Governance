@@ -312,7 +312,7 @@ dt-ai-observability-claude/
 │   ├── run-evals.sh / .ps1            Dynatrace Evals (dt-evals) sobre os spans capturados
 │   └── .dt-eval.yaml / .env           gerados pelo script (ignorados pelo git; .env guarda os tokens)
 ├── managed-settings.example.json      telemetria nativa do Claude Code para a frota
-├── Dashboard/Developers AI Usage.json dashboard (idêntico ao do asset VS Code)
+├── Dashboard/Developers AI Usage.json dashboard (versão só-Claude do dashboard do asset VS Code)
 ├── docs/dql-examples.md
 ├── test/                              sink + teste ponta a ponta
 ├── README.md · GUIDE.md · meta.yaml · LICENSE

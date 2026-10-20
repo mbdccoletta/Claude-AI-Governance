@@ -36,6 +36,10 @@ First complete version of **Dynatrace AI Observability for Claude**: three layer
   evaluators default to `prompt-injection,pii-leakage`, sample 10 % of the last hour, confirmation before any judge call. Requires
   prompt capture ON; results land as bizevents `gen_ai.evaluation.result`. `install.sh --enable-evals` only checks Node 20+ and prints the steps.
 
+### Scope
+- Claude only: the dashboard keeps just the Claude sections (GPT, Gemini and Copilot tiles removed), variables default to
+  `anthropic` and Claude models, and every span query filters Claude models. Other assistants are the VS Code asset's job.
+
 ### Known limitations
 - Personal Pro/Max subscriptions have no official usage source; Claude via Bedrock/Vertex/Foundry is not covered.
 - Enterprise adapter validated against the documented API shapes and a mock only (no Enterprise key was available).

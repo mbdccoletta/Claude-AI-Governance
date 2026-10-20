@@ -418,7 +418,7 @@ test/run-local-test.sh --tarball ./otelcol-contrib_0.163.1_darwin_arm64.tar.gz -
 | Collector config | `resources/otel-collector.yaml` | Same receivers / redaction / resource processor; adds a `logs` pipeline, the `gen_ai.provider.name` alias and the `claude.account_email` normalisation; drops the Copilot-specific transform |
 | Collector lifecycle | Spawned by the extension while VS Code runs | User service (launchd / systemd / Scheduled Task), independent of any editor |
 | Credentials | VS Code SecretStorage | OS credential store + wrapper script |
-| Dashboard | `Dashboard/Developers AI Usage.json` | Identical file |
+| Dashboard | `Dashboard/Developers AI Usage.json` | Claude-only variant: GPT / Gemini / Copilot sections removed, Claude filters and defaults |
 | Evals | `src/evals.ts`: *Configurar Evals* / *Rodar Evals* commands run `npx @dynatrace-oss/dt-evals` in a terminal (evaluator pick list, since 30m–24h, sample 10–100 %) | `evals/run-evals.sh` / `.ps1`: same CLI, evaluators and choices; config generated for this asset's span layout, prompt-capture check, y/N before paid runs |
 
 Both can coexist on one machine: they write the same `~/.claude/otel-hook.py` and the hook follows whichever collector port is in `otel-attrs.json`. Running two collectors at once is pointless; keep one.

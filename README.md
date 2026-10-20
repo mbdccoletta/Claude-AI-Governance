@@ -448,6 +448,8 @@ Service control:
 <a id="uninstall"></a>
 ## 🗑️ Uninstall
 
+Run the uninstaller from the asset folder (the same one you installed from):
+
 ```bash
 ./uninstall.sh            # asks for confirmation; --yes to skip, --keep-hooks / --keep-binary to keep parts
 ```
@@ -456,7 +458,36 @@ Service control:
 .\uninstall.ps1           # -Yes, -KeepHooks, -KeepBinary
 ```
 
-Removes the service, the stored token, the hook entries that reference `otel-hook.py` (other hooks are untouched), the native OTel env keys this asset added, `~/.claude/otel-attrs.json`, `~/.claude/otel-state/` and `~/.dt-ai-obs/`. Restart open Claude Code sessions afterwards.
+Everything the installer created is removed; nothing else in `~/.claude/settings.json` is touched:
+
+| What | Where | macOS | Linux | Windows |
+|---|---|---|---|---|
+| Collector service (stopped first) | user service | LaunchAgent `com.dynatrace.dt-ai-obs-claude` | `systemctl --user` unit `dt-ai-obs-claude.service` | Scheduled Task *Dynatrace AI Observability (Claude) collector* |
+| Ingest token | OS credential store | Keychain item | `secret-tool` entry (or the 0600 file) | DPAPI-encrypted file |
+| Claude Code hook entries | `~/.claude/settings.json` → `hooks` | the four entries (`PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`) that reference `otel-hook.py`; other hooks stay | same | same |
+| Native OTel env block (if `--enable-native-otel` was used) | `~/.claude/settings.json` → `env` | the `CLAUDE_CODE_ENABLE_TELEMETRY` / `OTEL_*` keys this asset added | same | same |
+| Hook script, attributes, state | `~/.claude/` | `otel-hook.py`, `otel-attrs.json`, `otel-state/` | same | same |
+| Collector binary, config, logs | `~/.dt-ai-obs/` | whole folder | same | same |
+
+Options:
+
+| Flag (bash / PowerShell) | Use it when |
+|---|---|
+| `--yes` / `-Yes` | scripted removal, no confirmation prompt |
+| `--keep-binary` / `-KeepBinary` | you plan to reinstall: keeps `~/.dt-ai-obs/bin` and saves the ~100 MB collector download |
+| `--keep-hooks` / `-KeepHooks` | you want the hook to keep emitting to another collector on `127.0.0.1:4318` (for example the VS Code extension's); the hook never blocks Claude Code if nothing is listening |
+
+Afterwards, **restart any open Claude Code session** (terminal or Desktop Code tab): hooks and env are read at startup, so a running session keeps the old ones until it is restarted.
+
+To confirm the machine is clean:
+
+```bash
+launchctl list | grep dt-ai-obs ; ls ~/.dt-ai-obs ~/.claude/otel-hook.py 2>&1 ; python3 -c "import json,os;s=json.load(open(os.path.expanduser('~/.claude/settings.json')));print(list((s.get('hooks') or {}).keys()), [k for k in (s.get('env') or {}) if k.startswith('OTEL')])"
+```
+
+All four commands should report nothing installed (`No such file`, `[] []`). On the tenant side nothing is deleted: spans, metrics and logs already ingested stay in Grail until their bucket retention expires, and the dashboard keeps working on that history.
+
+> **VS Code / Cursor extension users:** this asset and the *Dynatrace AI Governance For Devs* extension write the same `~/.claude/otel-hook.py` and hook entries. If both were installed, remove the extension with `code --uninstall-extension DynatraceExtensionCommunity.dt-ai-observability` (or its *Remove Claude Code Hooks* command) **and** run this uninstaller; whichever runs last leaves the machine clean.
 
 ---
 

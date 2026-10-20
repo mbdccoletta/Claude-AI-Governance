@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- docs: Uninstall section (README and GUIDE) now lists exactly what is removed per OS, when to use `--keep-hooks` / `--keep-binary`, how to verify the machine is clean, and how it coexists with the VS Code extension.
+
 ## 1.0.1 — 2026-10-20
 
 Hardening release: the four batches (P1–P4) of [docs/FINAL-REVIEW.md](docs/FINAL-REVIEW.md). No schema or dashboard-id changes;

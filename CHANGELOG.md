@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.1 — 2026-10-20 (in progress: batches P1–P4 from docs/FINAL-REVIEW.md)
+
+### P1 · hook privacy and integrity
+- `claude.tool_input` / `claude.tool_response` are sent only with `--capture-prompts`; the collector redaction processor also deletes them (`error_mode: propagate`).
+- State file per session is written atomically under an exclusive lock (`fcntl.flock`); tool records are keyed by `tool_use_id`
+  (fallback by name for older Claude Code); stale records expire; nothing is written for events of unknown sessions; `SessionEnd` cleans up.
+- Tokens are summed over every assistant message of the turn (offset taken from `transcript_path` at `UserPromptSubmit`), model and last
+  reply come from the transcript; `gen_ai.usage.cost_usd` is set only from values Claude Code reports (`cost_usd` on the Stop event or
+  `costUSD` in the transcript), never estimated.
+- State directory 0700, files 0600, session ids sanitised; prompt text persisted only when capture is on; prompt cleaner also strips
+  harness tags (`<command-*>`, `<local-command-stdout>`, `<ide_*>`), unclosed blocks and repeated spaces.
+- New `test/hook_tests.py` (isolated HOME + loopback sink): concurrency, privacy gates, token sums, state hygiene, dead collector.
+
+
 ## 1.0.0 — 2026-10-19
 
 First complete version of **Dynatrace AI Observability for Claude**: three layers, one tenant.

@@ -40,11 +40,14 @@ processors:
   # machine. The installer removes this processor from the pipelines only when
   # --capture-prompts is given (_capture_prompts=true in ~/.claude/otel-attrs.json).
   transform/redact_content:
-    error_mode: ignore
+    error_mode: propagate  # fail closed: a broken statement must not let content through
     trace_statements:
       - context: span
         statements:
           - delete_matching_keys(attributes, "^gen_ai[.](prompt|completion|input[.]messages|output[.]messages|system_instructions)")
+          # tool call input/output carry shell commands and file contents: opt-in only (--capture-prompts)
+          - delete_key(attributes, "claude.tool_input")
+          - delete_key(attributes, "claude.tool_response")
       - context: spanevent
         statements:
           - delete_matching_keys(attributes, "^gen_ai[.](prompt|completion|input[.]messages|output[.]messages|system_instructions)")

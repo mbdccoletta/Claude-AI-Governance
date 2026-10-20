@@ -452,7 +452,7 @@ Removes the service, the stored token, the hook entries that reference `otel-hoo
 ## 🔒 Privacy and security
 
 - **Prompt and response content is not sent by default.** The hook only adds content when `_capture_prompts` is `"true"`, and the collector's `transform/redact_content` processor deletes `gen_ai.prompt*`, `gen_ai.completion*`, `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions` (spans and span events) and the native `prompt` log attribute before anything leaves the machine. Metadata (model, tokens, cost, tool names) is kept.
-- **Tool input/output is always sent.** Each `claude.tool.<name>` span carries `claude.tool_input` and `claude.tool_response` (first 4 KiB each: shell commands, file paths, and the contents of files Claude Code reads or writes) on every tool span, **regardless of `--capture-prompts`** — the collector's redaction only covers the `gen_ai.*` prompt/completion attributes. A redaction option for these two attributes is planned; until then, to drop them add `- delete_key(attributes, "claude.tool_input")` and `- delete_key(attributes, "claude.tool_response")` to the span statements of `transform/redact_content` in `~/.dt-ai-obs/otel-collector.yaml` and restart the service (the edit is lost when the installer re-renders the config, and that processor is removed from the pipeline when capture is on).
+- **Tool input/output is always sent.** Each `claude.tool.<name>` span carries `claude.tool_input` and `claude.tool_response` (first 4 KiB each: shell commands, file paths, and the contents of files Claude Code reads or writes) on every tool span, **only when `--capture-prompts` is on: the hook omits them otherwise and the collector's redaction processor deletes them as a second guard (since 1.0.1).
 - **Evals are opt-in and never automatic.** [Dynatrace Evals](#evals) only works with capture on, asks before every paid run and is the one path where (masked) prompt text is sent outside the tenant: to the LLM judge provider you configure. Results go back to the same tenant without the evaluated text unless `--store-evaluated-prompt` is given.
 - **Token never in plain text on disk**: macOS Keychain, Linux Secret Service or Windows DPAPI; the service wrapper injects it as an environment variable into the collector process only. The Linux file fallback (0600) is used only when no keyring is available and is announced with a warning. The rendered collector config and `config.env` are mode 0600 and contain no token.
 - **Loopback only**: OTLP/HTTP, OTLP/gRPC and the health check bind to `127.0.0.1`. Outbound, the collector talks only to your tenant over HTTPS.
@@ -464,6 +464,8 @@ Removes the service, the stored token, the hook entries that reference `otel-hoo
 
 <a id="local-test"></a>
 ## 🧪 Local test (no tenant)
+
+`python3 test/hook_tests.py` exercises the hook alone (isolated HOME, loopback sink): 8 parallel tool calls, privacy gates, per-turn token sums, state-file hygiene, dead collector.
 
 [test/run-local-test.sh](test/run-local-test.sh) installs against a tiny OTLP sink ([test/sink.py](test/sink.py)) on `127.0.0.1:9999` with a dummy token, fires the four hook events for a synthetic Desktop session and a CLI session, optionally runs `claude -p` with native telemetry, checks that no prompt text reached the sink, prints what arrived and (with `--uninstall`) removes everything again. A sample run (macOS arm64, 2026-10-19) is in [test/local-e2e.log](test/local-e2e.log).
 

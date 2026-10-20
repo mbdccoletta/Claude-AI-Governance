@@ -179,6 +179,9 @@ for _i in $(seq 1 10); do pgrep -f "$INSTALL_DIR/bin/otelcol-contrib" >/dev/null
 port_free() { python3 - "$1" <<'PY'
 import socket, sys
 s = socket.socket(); s.settimeout(0.2)
+# SO_REUSEADDR like the collector itself (Go sets it): lingering TIME_WAIT connections from the
+# hook to the previous collector must not make the port read as busy
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
     s.bind(("127.0.0.1", int(sys.argv[1]))); s.close(); sys.exit(0)
 except OSError:
@@ -200,6 +203,7 @@ if [ -f "$INSTALL_DIR/config.env" ]; then
 fi
 if [ -z "$COLLECTOR_PORT" ]; then
   COLLECTOR_PORT=4318
+  for _i in 1 2 3 4 5 6; do port_free "$COLLECTOR_PORT" && break; sleep 0.5; done   # a just-stopped collector may still be releasing it
   if ! port_free "$COLLECTOR_PORT"; then
     if existing_health 13133; then
       warn "a collector already answers on 127.0.0.1:13133 (the VS Code extension, or a previous install of this asset)."

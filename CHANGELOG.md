@@ -13,6 +13,24 @@
   harness tags (`<command-*>`, `<local-command-stdout>`, `<ide_*>`), unclosed blocks and repeated spaces.
 - New `test/hook_tests.py` (isolated HOME + loopback sink): concurrency, privacy gates, token sums, state hygiene, dead collector.
 
+### P2 · layer 3 workflow — trust boundary, time budget, incremental ingest
+- `resolve_config` reads `org_type`, `credential_*`, `anthropic_base_url`, `org_id`, `ingest_batch_size` and `time_budget_ms` from the
+  workflow **input** only; run parameters may override just the lookback windows, `console_include_api_usage`, `dry_run` and `console_debug`
+  (anything else is ignored and logged). `anthropic_base_url` must be `https://api.anthropic.com` (URL-parsed; look-alike hosts rejected)
+  unless `allow_custom_base_url: true` (mocks only). Missing `org_type` fails fast.
+- 95 s time budget per task (`MAX_PAGES` 200, `Retry-After` clamped to 20 s and never slept across the deadline); accumulated events are
+  flushed when < 15 s are left and at the end; results carry `partial`, `reason`, `flushes`, `elapsed_ms`, `events_built`, `ingested`.
+  Ingest batches split by count **and** 4 MiB.
+- `requests` no longer double-counted (cost rows pass `null`); Console user actors without e-mail get `user.email: null` and a `user:<id>`
+  dedup key.
+- Workflow imported private; `vault_upsert.js` creates the credential with **Owner access only**; `deploy.sh` pipes the Anthropic key to
+  dtctl on stdin (never argv or a file), splits allowlist read and merge so a dtctl error is never mistaken for "create", warns when the
+  allowlist is not enforced, and gains `--public`.
+- DQL: `product == "claude_code"` filter restored in `official-vs-observed-tokens.dql`, logs side limited to `service.name`
+  `claude-code` / `claude-code-desktop`, `timezone: "UTC"` on every `formatTimestamp`; dashboard rebuilt and `--check` extended.
+- Mock server gains `MOCK_PAGES` / `MOCK_SLOW` (429 + `Retry-After`); the test suite adds guard, budget, requests-parity and
+  ingest-split scenarios. Verified on a real tenant (console workflow run: SUCCESS, `partial: false`).
+
 ### P3 · installer, collector and supply chain
 - Ingest token: whitespace stripped, format enforced (`dt0c01.<24>.<64>`) and an empty pre-flight POST to `<endpoint>/v1/traces`;
   401/403 abort the install (a double paste into the hidden prompt used to be accepted and fail with 401 later). Both installers.
@@ -30,6 +48,14 @@
   retried; `--help` prints the whole header (no fixed line range).
 - `import_team_spend.py`: `--tenant` must be https (loopback or `--allow-http` for mocks), retries 429/5xx with backoff, strict date check,
   5 MiB batch guard.
+- Re-install: waits for the previous collector to exit, probes ports with `SO_REUSEADDR` and retries the default port briefly, so a
+  re-install no longer drifts silently to 4319.
+
+### P4 · developer dimensions on the native metrics
+- New `transform/metric_dimensions` (after the `resource` processor in the metrics pipeline) copies `user.email`,
+  `deployment.environment` and every custom attribute (`squad`, `cost_center`, `--attr …`) from the resource onto each datapoint, so
+  `timeseries … by: {user.email}` on `claude_code.*` works without a tenant-side allow-list. The renderer emits one statement per
+  custom attribute. Verified on a real tenant.
 
 
 ## 1.0.0 — 2026-10-19

@@ -81,6 +81,17 @@ def main():
         sys.exit("render-config: custom attribute marker not found in template")
     text = text.replace(marker, "\n".join(attrs) if attrs else marker.replace("append", "found no"))
 
+    # the same custom attributes become metric dimensions (see transform/metric_dimensions)
+    dim_marker = "          # install.sh / install.ps1 append one statement per custom attribute (squad, cost_center, ...) here."
+    if dim_marker not in text:
+        sys.exit("render-config: metric dimension marker not found in template")
+    dims = []
+    for item in a.attr:
+        k = item.split("=", 1)[0].strip()
+        key = yaml_string(k)   # double-quoted, escaped: usable inside the OTTL statement and the YAML scalar
+        dims.append('          - set(attributes[%s], resource.attributes[%s]) where resource.attributes[%s] != nil and attributes[%s] == nil' % (key, key, key, key))
+    text = text.replace(dim_marker, "\n".join(dims) if dims else dim_marker.replace("append", "found no"))
+
     if not a.email:
         # No e-mail configured: keep Claude Code's own user.email on native
         # telemetry and do not stamp an empty one on the resource.

@@ -159,13 +159,21 @@ cacheCreation, plus `model`), `claude_code.cost.usage` (`model`), `claude_code.s
 `claude_code.lines_of_code.count` (`type` = added | removed), `claude_code.commit.count`,
 `claude_code.pull_request.count`, `claude_code.active_time.total`.
 
-> **`user.email`, `squad` and `cost_center` are not dimensions on these metrics.** The collector
-> stamps them as OTLP *resource* attributes; the datapoints carry only Claude Code's own
-> dimensions (`type`, `model`, `user.id`, `session.id`, …). Verified on a real tenant:
-> `timeseries … by: { user.email }` on `claude_code.*` returns `null`. The per-developer split
-> comes from the hook spans and from the `api_request` log events above, which do carry those
-> fields. Stamping the attributes at datapoint level in the collector is planned; until then
-> group the metrics by `model`, `type` or `user.id`.
+> **Developer dimensions (1.0.1+).** Claude Code's datapoints carry only its own dimensions
+> (`type`, `model`, `user.id`, `session.id`, …), and Dynatrace does not turn OTLP *resource*
+> attributes into dimensions unless they are allow-listed in the tenant, so with 1.0.0
+> `timeseries … by: { user.email }` on `claude_code.*` returned `null`. Since 1.0.1 the collector's
+> `transform/metric_dimensions` copies `user.email`, `deployment.environment` and every custom
+> attribute (`squad`, `cost_center`, `--attr …`) onto each datapoint, so the queries below group
+> by developer directly. Machines still running 1.0.0 only show up under `model` / `type` / `user.id`.
+
+```dql
+timeseries Tokens = sum(claude_code.token.usage), by: { `user.email`, type }, interval: 1h
+```
+
+```dql
+timeseries Cost_USD = sum(claude_code.cost.usage), by: { squad, `user.email` }, interval: 1d
+```
 
 ```dql
 timeseries Tokens = sum(claude_code.token.usage), by: { type, model }, interval: 1h

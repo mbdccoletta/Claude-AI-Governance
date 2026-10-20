@@ -91,6 +91,20 @@ processors:
           - set(attributes["claude.account_email"], attributes["user.email"]) where attributes["user.email"] != nil
           - delete_key(attributes, "user.email")
 
+  # Dynatrace turns OTLP *datapoint* attributes into metric dimensions, but
+  # resource attributes only when they are allow-listed in the tenant. Copy the
+  # developer attributes set by the resource processor onto every datapoint so
+  # `timeseries … by: {user.email}` works on claude_code.* out of the box
+  # (one developer per machine: no cardinality cost). Must run after `resource`.
+  transform/metric_dimensions:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["user.email"], resource.attributes["user.email"]) where resource.attributes["user.email"] != nil and attributes["user.email"] == nil
+          - set(attributes["deployment.environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil and attributes["deployment.environment"] == nil
+          # install.sh / install.ps1 append one statement per custom attribute (squad, cost_center, ...) here.
+
 exporters:
   debug:
     verbosity: normal
@@ -117,7 +131,7 @@ service:
       exporters:  [debug, otlp_http/dynatrace]
     metrics:
       receivers:  [otlp]
-      processors: [memory_limiter, transform/native_email, cumulative_to_delta, batch, resource]
+      processors: [memory_limiter, transform/native_email, cumulative_to_delta, batch, resource, transform/metric_dimensions]
       exporters:  [debug, otlp_http/dynatrace]
     logs:
       receivers:  [otlp]

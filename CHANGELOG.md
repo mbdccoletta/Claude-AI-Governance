@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- docs: the *Chat and Cowork unified* toggle lives under Organization settings → **Capabilities (Recursos) → Chat** (path corrected); two pt-BR admin screenshots added (Monitoring, unified toggle), tenant host and org masked.
 - docs: chat-mode matrix (unified on/off × Cowork/chat), recommendation and customer caveats for *Chat and Cowork unified*, and six redacted screenshots (`docs/images/cowork/`) in README, GUIDE and the validation runbook; note that the dashboard's Cowork section fills from these events.
 - docs: Cowork export also validated for tasks started in the Claude Desktop app (2.42304.2) with a local folder: on a Team org they run as cloud sessions with the folder shared and arrive as `cowork.surface = remote`; runbook troubleshooting for "local" tests that never ran.
 - feat(dashboard): *Developers AI Usage* gains a **Cowork e chat unificado** section (6 logs-based tiles on `service.name == "cowork"`: cost, requests, active developers, tokens, tokens over time by model, top developers by cost with `cowork.surface`). Layer 2 log queries in `docs/dql-examples.md` include `cowork` (split by `service.name`) plus a Cowork-by-surface example; layer 3 `official-vs-observed-tokens.dql` and the coverage KPI compare `claude_code` and `cowork` per product (`build.py --check` updated). All changed queries validated on a real tenant; connector test suite passes.

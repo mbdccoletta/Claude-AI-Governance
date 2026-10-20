@@ -329,7 +329,7 @@ fetch logs, from:now()-24h
 | **Off** — classic Chat \| Cowork selector | ✅ exported (validated from the Desktop app with a local folder) | ❌ not exported |
 | **On** (beta) — one Home, no separate Cowork | ✅ exported (validated from claude.ai web) | ✅ exported as `service.name = cowork` (validated from claude.ai web; Desktop chat expected to behave the same) |
 
-**Recommendation:** to see *everything* (Claude Code + Cowork + chat) per developer, turn **Chat and Cowork unified** on (Organization settings → Chat). Before doing it at a customer, flag that it is beta, that users lose the Chat/Cowork selector and their conversations run on Anthropic's cloud, and that their security team may need to review code execution and file access in the cloud (Anthropic links a security guide from the toggle). Leave *Early access: Run Cowork in the cloud* as it is; it is a separate setting and was off during the validation.
+**Recommendation:** to see *everything* (Claude Code + Cowork + chat) per developer, turn **Chat and Cowork unified** on (Organization settings → Capabilities → Chat). Before doing it at a customer, flag that it is beta, that users lose the Chat/Cowork selector and their conversations run on Anthropic's cloud, and that their security team may need to review code execution and file access in the cloud (Anthropic links a security guide from the toggle). Leave *Early access: Run Cowork in the cloud* as it is; it is a separate setting and was off during the validation.
 
 Screens (tenant host and org name masked):
 
@@ -341,6 +341,12 @@ Screens (tenant host and org name masked):
 |---|---|
 | ![Desktop unified Home](docs/images/cowork/desktop-unified-home.png) | ![Desktop classic Chat and Cowork](docs/images/cowork/desktop-classic-chat-cowork.png) |
 
+Same screens in the Portuguese UI — Monitoring under **Dados e privacidade** and the unified toggle under **Recursos → Chat**:
+
+![Admin Monitoring, pt-BR UI](docs/images/cowork/admin-monitoring-pt.png)
+
+![Chat and Cowork unified toggle, pt-BR UI](docs/images/cowork/admin-capabilities-unified-chat-pt.png)
+
 Office Agents block with *Copy settings from Cowork*: ![Office Agents](docs/images/cowork/office-agents-copy-settings.png)
 
 **In the dashboard:** the *Cowork e chat unificado* section of *Developers AI Usage* fills from these events as soon as they land (validated on the lab tenant: cost, requests, active developers, tokens, tokens by model, top developers with `cowork.surface`).
@@ -348,7 +354,7 @@ Office Agents block with *Copy settings from Cowork*: ![Office Agents](docs/imag
 Notes:
 
 - **Dashboards.** *Developers AI Usage* has a **Cowork e chat unificado** section (cost, requests, active developers, tokens, tokens over time by model, top developers with `cowork.surface`) read from these logs; its other tiles read `gen_ai` spans, which Cowork does not send, and its Provider/Modelo variables do not apply to the Cowork section. The layer 2 log queries in [docs/dql-examples.md](docs/dql-examples.md) accept `cowork` next to `claude-code` / `claude-code-desktop`, and the layer 3 coverage tiles compare `claude_code` and `cowork` per product.
-- **Unified chat counts as Cowork.** With *Chat and Cowork unified* (beta toggle, available on Team and Enterprise under Organization settings → Chat) ordinary chats run as Cowork sessions and are exported here, so the claude.ai chat gap closes for orgs that turn it on. Validated: a plain chat in claude.ai web arrived as `service.name = cowork`, `cowork.surface = remote`.
+- **Unified chat counts as Cowork.** With *Chat and Cowork unified* (beta toggle, available on Team and Enterprise under Organization settings → Capabilities → Chat) ordinary chats run as Cowork sessions and are exported here, so the claude.ai chat gap closes for orgs that turn it on. Validated: a plain chat in claude.ai web arrived as `service.name = cowork`, `cowork.surface = remote`.
 - **Delay.** Cloud sessions took several minutes to show up in Grail on the first run; allow up to ~20 minutes before troubleshooting.
 - **Token placement.** Pointing the admin console straight at Dynatrace puts an ingest token in the claude.ai admin console (encrypted at rest by Anthropic). Use a dedicated `logs.ingest`-only token so it can be revoked on its own. For redaction or fan-out, use a collector with a public HTTPS endpoint; the local `127.0.0.1:4318` collector of this asset cannot receive cloud sessions.
 - **Office Agents** (Excel, PowerPoint, Word add-ins) have their own Monitoring block on the same page with a *Copy settings from Cowork* button; not validated yet.

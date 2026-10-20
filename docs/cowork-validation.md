@@ -42,7 +42,7 @@ Se o tenant restringe leitura de logs por grupo IAM, confira que o grupo de quem
 
 4. Salve.
 
-![Monitoring configurado](images/cowork/monitoring-configured.png)
+![Monitoramento configurado, interface em português](images/cowork/admin-monitoring-pt.png)
 
 Se o cliente também usa os add-ins de Office, clique em *Copy settings from Cowork* no bloco **Office Agents**.
 
@@ -57,7 +57,9 @@ Alternativa quando o cliente não quer o token no console da Anthropic ou precis
 | Desligado (seletor Chat \| Cowork no Desktop) | só Cowork |
 | Ligado (beta, Home única) | Cowork **e** chat |
 
-Para medir tudo, ligue em Organization settings → Chat, depois de alinhar com o cliente (beta, muda a experiência dos usuários, revisão de segurança).
+Para medir tudo, ligue em Organization settings → Recursos (Capabilities) → Chat, depois de alinhar com o cliente (beta, muda a experiência dos usuários, revisão de segurança).
+
+![Toggle Chat e Cowork unificados em Recursos → Chat](images/cowork/admin-capabilities-unified-chat-pt.png)
 
 | Unificado ligado | Unificado desligado |
 |---|---|
@@ -89,7 +91,7 @@ Se o passo 1 mostra eventos mas o passo 3 vem vazio, o Cowork nomeia os campos d
 | Nada chega | prefixo `dt0c01.` duplicado no header (o caso mais comum: digitar `dt0c01.` e colar o token que já começa com ele) | redigitar o header: `Authorization=Api-Token ` + token colado |
 | Nada chega, passo 4 mostra `rejected > 0` | protocolo HTTP/JSON, ou endpoint com `/v1/logs` duplicado | trocar para HTTP/protobuf; usar a URL base |
 | Teste "local" no Desktop não gera evento | a sessão não chegou a rodar: com *Chat and Cowork unified* ligado a aba Cowork some; trocar de conta logo após enviar encerra a sessão | rodar pela aba Cowork (ou Home), esperar a resposta terminar antes de trocar de conta; `~/Library/Logs/Claude/main.log` mostra `grantRemoteSessionFolders` quando a tarefa com pasta local começa |
-| Usuário mandou só chat | sem o *Chat and Cowork unified* ligado, o chat não exporta | ligar o toggle em Organization settings → Chat, ou testar com uma tarefa Cowork |
+| Usuário mandou só chat | sem o *Chat and Cowork unified* ligado, o chat não exporta | ligar o toggle em Organization settings → Recursos (Capabilities) → Chat, ou testar com uma tarefa Cowork |
 | Nada chega, `received = 0` | token sem `logs.ingest`, host `.apps.`, ou Desktop abaixo da versão mínima | regerar token; usar `.live.`; atualizar o Desktop |
 | Eventos chegam, `fetch logs` vazio para quem consulta | grupo IAM sem leitura do bucket `default_logs` | política IAM de leitura no bucket |
 | Só o usuário do Desktop aparece | versão do Desktop abaixo de 1.22209.3 para sessões na nuvem, ou a sessão web ainda não terminou | atualizar; esperar e repetir |

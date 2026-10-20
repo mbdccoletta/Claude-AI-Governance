@@ -310,7 +310,7 @@ fetch logs, from:now()-24h
 | **Desligado** — seletor clássico Chat \| Cowork | ✅ exporta (validado pelo app Desktop com pasta local) | ❌ não exporta |
 | **Ligado** (beta) — uma Home só, sem Cowork separado | ✅ exporta (validado pelo claude.ai web) | ✅ exporta como `service.name = cowork` (validado pelo claude.ai web; o chat do Desktop deve se comportar igual) |
 
-**Recomendação:** para ver *tudo* (Claude Code + Cowork + chat) por desenvolvedor, ligue o **Chat and Cowork unified** (Organization settings → Chat). Antes de fazer isso num cliente, avise que é beta, que os usuários perdem o seletor Chat/Cowork e as conversas passam a rodar na nuvem da Anthropic, e que o time de segurança pode precisar revisar execução de código e acesso a arquivos na nuvem (a Anthropic linka um guia de segurança no próprio toggle). Deixe *Acesso antecipado: Execute o Cowork na nuvem* como está; é outra configuração e ficou desligada durante a validação.
+**Recomendação:** para ver *tudo* (Claude Code + Cowork + chat) por desenvolvedor, ligue o **Chat and Cowork unified** (Organization settings → Recursos (Capabilities) → Chat). Antes de fazer isso num cliente, avise que é beta, que os usuários perdem o seletor Chat/Cowork e as conversas passam a rodar na nuvem da Anthropic, e que o time de segurança pode precisar revisar execução de código e acesso a arquivos na nuvem (a Anthropic linka um guia de segurança no próprio toggle). Deixe *Acesso antecipado: Execute o Cowork na nuvem* como está; é outra configuração e ficou desligada durante a validação.
 
 Telas (host do tenant e nome da org mascarados):
 
@@ -322,6 +322,12 @@ Telas (host do tenant e nome da org mascarados):
 |---|---|
 | ![Home unificada do Desktop](docs/images/cowork/desktop-unified-home.png) | ![Chat e Cowork clássicos no Desktop](docs/images/cowork/desktop-classic-chat-cowork.png) |
 
+Na interface em português: Monitoramento fica em **Dados e privacidade**, e o toggle do modo unificado em **Recursos → Chat**:
+
+![Monitoramento no console admin](docs/images/cowork/admin-monitoring-pt.png)
+
+![Toggle Chat e Cowork unificados](docs/images/cowork/admin-capabilities-unified-chat-pt.png)
+
 Bloco do Office Agents com *Copy settings from Cowork*: ![Office Agents](docs/images/cowork/office-agents-copy-settings.png)
 
 **No dashboard:** a seção *Cowork e chat unificado* do *Developers AI Usage* é alimentada por esses eventos assim que chegam (validado no tenant de laboratório: custo, requests, devs ativos, tokens, tokens por modelo e top devs com `cowork.surface`).
@@ -329,7 +335,7 @@ Bloco do Office Agents com *Copy settings from Cowork*: ![Office Agents](docs/im
 Observações:
 
 - **Dashboards.** O *Developers AI Usage* tem a seção **Cowork e chat unificado** (custo, requests, devs ativos, tokens, tokens ao longo do tempo por modelo e top devs com `cowork.surface`), lida desses logs; os outros tiles leem spans `gen_ai`, que o Cowork não manda, e as variáveis Provider/Modelo não se aplicam à seção do Cowork. As queries de log da camada 2 em [docs/dql-examples.md](docs/dql-examples.md) aceitam `cowork` ao lado de `claude-code` / `claude-code-desktop`, e os tiles de cobertura da camada 3 comparam `claude_code` e `cowork` por produto.
-- **Chat unificado conta como Cowork.** Com o *Chat and Cowork unified* (toggle beta, disponível no Team e no Enterprise em Organization settings → Chat) as conversas comuns rodam como sessões Cowork e saem por esta exportação, então o gap do chat do claude.ai fecha para as orgs que ligarem. Validado: um chat comum no claude.ai web chegou como `service.name = cowork`, `cowork.surface = remote`.
+- **Chat unificado conta como Cowork.** Com o *Chat and Cowork unified* (toggle beta, disponível no Team e no Enterprise em Organization settings → Recursos (Capabilities) → Chat) as conversas comuns rodam como sessões Cowork e saem por esta exportação, então o gap do chat do claude.ai fecha para as orgs que ligarem. Validado: um chat comum no claude.ai web chegou como `service.name = cowork`, `cowork.surface = remote`.
 - **Atraso.** Na primeira execução, as sessões na nuvem levaram vários minutos para aparecer no Grail; espere até ~20 minutos antes de investigar.
 - **Onde fica o token.** Apontar o console admin direto para o Dynatrace coloca um token de ingest no console do claude.ai (cifrado em repouso pela Anthropic). Use um token dedicado, só com `logs.ingest`, para poder revogar isoladamente. Para redação ou fan-out, use um collector com endpoint HTTPS público; o collector local em `127.0.0.1:4318` deste asset não recebe sessões da nuvem.
 - **Office Agents** (add-ins de Excel, PowerPoint e Word) têm um bloco próprio de Monitoring na mesma página, com o botão *Copy settings from Cowork*; ainda não validado.

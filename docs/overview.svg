@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1010" width="1400" height="1010" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9aa0a6"/></marker>
+    <marker id="mo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d9962b"/></marker>
+  </defs>
+  <style>
+    .lane { fill:#1b1b22; stroke:#2b2b33; }
+    .title { fill:#fff; font-size:26px; font-weight:700; }
+    .sub { fill:#b3b7bd; font-size:14px; }
+    .lanet { fill:#fff; font-size:16px; font-weight:700; letter-spacing:1px; }
+    .box { fill:#24242c; stroke:#3a3a44; stroke-width:1; rx:12; }
+    .bb { fill:#1e2633; stroke:#4f9cf9; stroke-width:1.6; rx:12; }
+    .bo { fill:#2a2420; stroke:#d9962b; stroke-width:1.6; rx:12; }
+    .bg { fill:#1f2a24; stroke:#2e9e6a; stroke-width:1.6; rx:12; }
+    .h { fill:#fff; font-size:16px; font-weight:700; }
+    .t { fill:#d7dadf; font-size:13.5px; }
+    .k { fill:#9aa0a6; font-size:12.5px; }
+    .n { fill:#fff; font-size:13px; font-weight:700; }
+    .ln { stroke:#9aa0a6; stroke-width:2; fill:none; marker-end:url(#m); }
+    .lo { stroke:#d9962b; stroke-width:2; fill:none; marker-end:url(#mo); }
+  </style>
+  <rect width="1400" height="1010" fill="#16161d"/>
+  <text x="30" y="44" class="title">Dynatrace AI Observability for Claude</text>
+  <text x="30" y="68" class="sub">Tokens, custo e prompts do Claude por desenvolvedor, dentro do Dynatrace. Dois trilhos: tempo real na máquina e custo oficial da Anthropic.</text>
+
+  <!-- COMO FUNCIONA -->
+  <rect x="30" y="88" width="1340" height="330" class="lane" rx="14"/>
+  <text x="48" y="114" class="lanet">COMO FUNCIONA</text>
+
+  <!-- row 1: realtime flow -->
+  <rect x="48" y="130" width="300" height="130" class="bb"/>
+  <text x="62" y="154" class="h">Máquina do desenvolvedor</text>
+  <text x="62" y="178" class="t">• Claude Desktop (Code tab) ou claude CLI</text>
+  <text x="62" y="198" class="t">• Hook: 1 span por conversa e por tool call</text>
+  <text x="62" y="218" class="t">• OTel nativo: tokens e custo por chamada</text>
+  <text x="62" y="238" class="t">• Prompts só se o dev habilitar</text>
+
+  <rect x="388" y="130" width="300" height="130" class="box"/>
+  <text x="402" y="154" class="h">Collector local</text>
+  <text x="402" y="178" class="t">• Serviço do usuário, ~50 MB, sem Docker</text>
+  <text x="402" y="198" class="t">• Adiciona e-mail, squad e cost center</text>
+  <text x="402" y="218" class="t">• Remove prompts quando captura está off</text>
+  <text x="402" y="238" class="t">• Envia por HTTPS ao tenant (OTLP)</text>
+
+  <rect x="728" y="130" width="300" height="130" class="box"/>
+  <text x="742" y="154" class="h">Dynatrace</text>
+  <text x="742" y="178" class="t">• Spans, métricas e logs no Grail</text>
+  <text x="742" y="198" class="t">• App AI Observability (Prompts stream)</text>
+  <text x="742" y="218" class="t">• 2 dashboards prontos</text>
+  <text x="742" y="238" class="t">• DQL de conciliação observado × oficial</text>
+
+  <rect x="1068" y="130" width="284" height="130" class="bg"/>
+  <text x="1082" y="154" class="h">Resultado</text>
+  <text x="1082" y="178" class="t">• Custo e tokens por dev e por time</text>
+  <text x="1082" y="198" class="t">• Adoção: sessões, modelos, ferramentas</text>
+  <text x="1082" y="218" class="t">• Prompts e respostas (opcional)</text>
+  <text x="1082" y="238" class="t">• Evals: PII, prompt injection (opcional)</text>
+
+  <path d="M348,195 L388,195" class="ln"/>
+  <path d="M688,195 L728,195" class="ln"/>
+  <path d="M1028,195 L1068,195" class="ln"/>
+
+  <!-- row 2: official -->
+  <rect x="48" y="278" width="640" height="124" class="bo"/>
+  <text x="62" y="302" class="h">Fonte oficial: Workflow no tenant, sem agente</text>
+  <text x="62" y="326" class="t">• Todo dia às 15:00 UTC consulta a Anthropic com a chave do Credential vault</text>
+  <text x="62" y="346" class="t">• Enterprise: chat, Claude Code, Cowork e Design por usuário (Analytics API)</text>
+  <text x="62" y="366" class="t">• Console: Claude Code por usuário e API por workspace (Admin API)</text>
+  <text x="62" y="386" class="t">• Team: CSV de gastos importado por script · gera 1 evento por usuário/produto/dia</text>
+
+  <rect x="728" y="278" width="624" height="124" class="box"/>
+  <text x="742" y="302" class="h">Cobertura e privacidade</text>
+  <text x="742" y="326" class="t">• Tempo real: só máquinas instrumentadas (Desktop e CLI)</text>
+  <text x="742" y="346" class="t">• Oficial: toda a organização, inclusive claude.ai chat e Claude Code web</text>
+  <text x="742" y="366" class="t">• Fora: planos pessoais Pro/Max no oficial · Claude via Bedrock/Vertex</text>
+  <text x="742" y="386" class="t">• Prompts desligados por padrão · segredos só em Keychain e vault</text>
+
+  <path d="M688,340 C708,340 708,250 728,250" class="lo"/>
+
+
+  <!-- ONDE O DEV USA → COMO MEDIMOS -->
+  <rect x="30" y="436" width="1340" height="250" class="lane" rx="14"/>
+  <text x="48" y="462" class="lanet">POR ONDE O DEV USA O CLAUDE  →  COMO MEDIMOS</text>
+  <text x="62" y="486" class="k">Onde</text>
+  <text x="330" y="486" class="k">Como</text>
+  <text x="840" y="486" class="k">O que se vê</text>
+  <line x1="48" y1="494" x2="1352" y2="494" stroke="#3a3a44"/>
+
+  <text x="62" y="518" class="h" fill="#4f9cf9">Claude Desktop (Code tab)</text>
+  <text x="330" y="518" class="t">install.sh na máquina: hook + OTel nativo + collector</text>
+  <text x="840" y="518" class="t">conversas, tool calls, tokens, custo, prompts (opcional)</text>
+
+  <text x="62" y="546" class="h" fill="#4f9cf9">claude CLI no terminal</text>
+  <text x="330" y="546" class="t">mesmo instalador; service.name distingue CLI de Desktop</text>
+  <text x="840" y="546" class="t">idem</text>
+
+  <text x="62" y="574" class="h" fill="#4f9cf9">VS Code / Cursor</text>
+  <text x="330" y="574" class="t">extensão VS Code (asset irmão) ou este instalador: mesmo hook</text>
+  <text x="840" y="574" class="t">idem, mais GitHub Copilot Chat pela extensão</text>
+
+  <text x="62" y="602" class="h" fill="#2e9e6a">Claude Code na web (nuvem)</text>
+  <text x="330" y="602" class="t">OTel nativo com variáveis OTEL_* no ambiente cloud (sem hook)</text>
+  <text x="840" y="602" class="t">tokens e custo por chamada; sem prompts e tool calls</text>
+
+  <text x="62" y="630" class="h" fill="#d9962b">claude.ai chat, Cowork, Design</text>
+  <text x="330" y="630" class="t">fonte oficial: Enterprise Analytics API ou CSV do plano Team</text>
+  <text x="840" y="630" class="t">custo e tokens diários por usuário e produto</text>
+
+  <text x="62" y="658" class="h" fill="#d9962b">Qualquer uso da org (conciliação)</text>
+  <text x="330" y="658" class="t">fonte oficial, todo dia às 15:00 UTC, via Workflow no tenant</text>
+  <text x="840" y="658" class="t">o que a Anthropic cobra, inclusive quem não instalou nada</text>
+
+  <text x="62" y="680" class="k">Não coberto: planos pessoais Pro/Max no oficial · Claude via Amazon Bedrock, Vertex ou Foundry (usar o billing da nuvem)</text>
+
+  <!-- COMO INSTALAR -->
+  <rect x="30" y="706" width="1340" height="300" class="lane" rx="14"/>
+  <text x="48" y="732" class="lanet">COMO INSTALAR</text>
+
+  <rect x="48" y="748" width="420" height="240" class="box"/>
+  <text x="62" y="772" class="h">1 · Admin Dynatrace, uma vez</text>
+  <text x="62" y="800" class="t">• Instalar o app AI &amp; LLM Observability (Hub)</text>
+  <text x="62" y="822" class="t">• Criar token de ingest com 3 escopos:</text>
+  <text x="76" y="840" class="k">openTelemetryTrace.ingest · metrics.ingest · logs.ingest</text>
+  <text x="62" y="864" class="t">• Garantir leitura dos buckets de logs (IAM)</text>
+  <text x="62" y="888" class="t">• Para a fonte oficial: guardar a chave Anthropic</text>
+  <text x="76" y="906" class="k">Credential vault · Token · escopo AppEngine</text>
+  <text x="62" y="930" class="t">• Quem gera a chave:</text>
+  <text x="76" y="948" class="k">Enterprise: primary owner (Analytics key)</text>
+  <text x="76" y="966" class="k">Console: admin (Admin key) · Team: só CSV</text>
+
+  <rect x="490" y="748" width="420" height="240" class="bb"/>
+  <text x="504" y="772" class="h">2 · Cada desenvolvedor, ~3 minutos</text>
+  <text x="504" y="800" class="t">• macOS / Linux:</text>
+  <text x="518" y="818" class="k">./install.sh --endpoint TENANT --email EMAIL</text>
+  <text x="504" y="842" class="t">• Windows:</text>
+  <text x="518" y="860" class="k">.\install.ps1 -Endpoint TENANT -Email EMAIL</text>
+  <text x="504" y="884" class="t">• O instalador pede o token (oculto) e configura</text>
+  <text x="518" y="902" class="k">hook · collector · serviço · Keychain · OTel nativo</text>
+  <text x="504" y="926" class="t">• Opcional: --capture-prompts</text>
+  <text x="504" y="950" class="t">• Reiniciar as sessões abertas do Claude Code</text>
+  <text x="504" y="974" class="t">• Validar: health local 200 e spans no tenant</text>
+
+  <rect x="932" y="748" width="420" height="240" class="bo"/>
+  <text x="946" y="772" class="h">3 · Tenant, uma vez (fonte oficial)</text>
+  <text x="946" y="800" class="t">• Um comando com dtctl:</text>
+  <text x="960" y="818" class="k">connector/deploy/deploy.sh --org-type TIPO --yes</text>
+  <text x="946" y="842" class="t">• Faz sozinho: allowlist de saída, workflow</text>
+  <text x="960" y="860" class="k">agendado, dashboards, execução de teste, DQL</text>
+  <text x="946" y="884" class="t">• O workflow acha a chave no vault pelo nome</text>
+  <text x="946" y="908" class="t">• Claude Code pode executar o deploy (skill)</text>
+  <text x="960" y="926" class="k">só não cola segredos: isso fica com o admin</text>
+  <text x="946" y="950" class="t">• Team: exportar CSV e rodar o importador</text>
+  <text x="946" y="974" class="t">• Detalhes: connector/README.md</text>
+</svg>

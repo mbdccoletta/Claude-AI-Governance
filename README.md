@@ -15,7 +15,7 @@
 | 2 · Native OTel | Claude Code's own metrics and log events | tokens and cost per API call, sessions, lines of code, commits | this folder (`--enable-native-otel`) |
 | 3 · Official | Anthropic Enterprise Analytics API, Console Admin API, Team CSV | what Anthropic bills per user and product for the whole org, incl. claude.ai chat, Cowork, Design, Claude Code web | [`connector/`](connector/README.md) |
 
-Diagrams: [data collection architecture](connector/docs/data-collection-architecture.svg) · [installation process](connector/docs/installation-process.svg).
+Diagrams: [one-page overview](docs/overview.svg) · [data collection architecture](connector/docs/data-collection-architecture.svg) · [installation process](connector/docs/installation-process.svg).
 
 ---
 

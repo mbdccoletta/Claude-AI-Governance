@@ -1,7 +1,7 @@
 # Connector — layer 3: official daily Claude usage & cost per developer
 
 Layers 1 and 2 of dt-ai-observability-claude see what happens on instrumented machines in real time (Claude Code hooks → spans,
-Claude Code native OTel metrics/logs). They cannot see claude.ai chat, Cowork, Design, Claude Code on the web, or any
+Claude Code native OTel metrics/logs; Cowork's admin-configured OTel export). They cannot see claude.ai chat, Design, Claude Code on the web, or any
 developer who did not install the hooks. **Layer 3 is the official, billing-grade source**: once a day it imports
 Anthropic's own per-user usage and cost figures into Grail as business events (`event.type = "claude.usage.daily"`, one
 event per user × product × model × UTC day × source). Prompts and content are never collected.
@@ -41,7 +41,7 @@ imported by hand with Dashboards → Upload or `dtctl apply -f` (see [Dashboard]
 |---|---|---|---|---|---|
 | **Claude Enterprise** (claude.ai, usage-based plan) | `enterprise` | **Analytics API key** (scope `read:analytics`) | claude.ai → Organization settings → API. Only the **primary owner** can enable API access and create it. | `GET /v1/organizations/analytics/user_cost_report` and `user_usage_report` (`bucket_width=1d`, `group_by[]=product,model`, `limit=1000`) | yes — chat, claude_code, cowork, design, … |
 | **Claude Console / Claude Platform** (API orgs) | `console` | **Admin API key** `sk-ant-admin01-…` | platform.claude.com/settings/admin-keys (organization admin) | `GET /v1/organizations/usage_report/claude_code` (per user/API key, per day) and optionally `usage_report/messages` grouped by model + workspace (org-level, `product=api`) | yes for Claude Code; API usage is org/workspace level |
-| **Claude Team** | `team` | none | claude.ai → Settings → Analytics → **export spend CSV** (≤ 90 days, daily refresh, 1-day lag) | none — run `csv-import/import-team-csv.sh <file>` (Team admin, one command) | yes (from the CSV) |
+| **Claude Team** | `team` | none | claude.ai → Settings → Analytics → **export spend CSV** (≤ 90 days, daily refresh, 1-day lag; **overage spend only**, beyond the seat allotment; Owner / Primary Owner only) | none — run `csv-import/import-team-csv.sh <file>` (Team admin, one command) | yes (from the CSV) |
 
 The two key types are not interchangeable: an Admin key cannot call the Enterprise Analytics API and vice-versa.
 Seat-based Enterprise plans get usage credits only in the cost endpoints, not dollars.
@@ -112,7 +112,7 @@ With an OAuth dtctl context the vault step needs the `environment-api:credential
 Token credential in the UI instead and pass `CREDENTIAL_ID=… --skip-vault`. `deploy/deploy_all.sh` runs the three org types in one go.
 
 ### 4. Team plan: CSV importer
-The only manual step is the export (claude.ai → Settings → Analytics → export spend CSV, refreshed daily, 1-day lag). Everything after
+The only manual step is the export (claude.ai → Settings → Analytics → export spend CSV, refreshed daily, 1-day lag; only an Owner or Primary Owner can export). **The CSV holds overage spend only**: usage within the seat allotment and the flat seat fee never appear, and no report exists while extra usage is off, so the imported rows mean "extra usage per user", not total consumption (Anthropic: [usage analytics](https://support.claude.com/en/articles/12883420-view-usage-analytics-for-team-and-enterprise-plans); same reading by FinOps vendors such as [Finout](https://docs.finout.io/billing-integrations/ai-providers/connect-to-anthropic/tracking-claude.ai-spend-teams-plan)). Everything after
 it is one command, meant for the Team admin, not for developers:
 ```bash
 csv-import/import-team-csv.sh ~/Downloads/spend-export.csv            # Windows: csv-import\import-team-csv.ps1 .\spend-export.csv
@@ -189,7 +189,7 @@ Things to know when reading it:
 |---|---|---|---|
 | Enterprise Analytics API | usually < 4 h, up to 24 h; engagement endpoints 1 day | cost/usage values can change until **~7 days after the end of the calendar month** | hence the 10-day re-read; `usage.complete` flags days ≤ `data_refreshed_at`; data exists from 2026-01-01 |
 | Console Admin API | `usage_report/claude_code` is daily, typically within ~1 h. `usage_report/messages` returns **closed buckets only**: the connector reads past days with `bucket_width=1d` and today with `1h` buckets, so API usage shows up ~1 h after the request (verified on a real org) | today's rows grow during the day | 3-day re-read; `requests` not exposed; `product=api` rows have no cost (use `/v1/organizations/cost_report` if needed) |
-| Team CSV | manual; export refreshed daily with a 1-day lag | re-export and re-import overwrite via dedup | no cache token columns |
+| Team CSV | manual; export refreshed daily with a 1-day lag | re-export and re-import overwrite via dedup | overage only; no cache token columns |
 
 * **Amazon Bedrock / Vertex / Foundry are not covered**: Claude usage through cloud marketplaces does not appear in any of these
   Anthropic endpoints (the Enterprise API explicitly excludes Bedrock Claude Code activity; Console on AWS has no usage API).

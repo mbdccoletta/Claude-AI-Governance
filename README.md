@@ -377,6 +377,16 @@ A one-line prompt shows up as 20 000+ input tokens. That is correct: every turn 
 
 ---
 
+**Estimated cost in the dashboard.** The *Developers AI Usage* dashboard computes `cost_usd` inside its queries, with the same formula as
+the VS Code asset (kept identical on purpose, so both assets show the same numbers): `input_tokens × input price + output_tokens × output
+price`, list prices picked by model family (`opus` 15/75, `sonnet` 3/15, `haiku` 0.80/4 USD per 1M tokens; other names fall back to 2/10).
+Because `gen_ai.usage.input_tokens` includes cache reads, which Anthropic bills at ~10 % of the input price, this estimate is an **upper
+bound** and can be several times the invoice for cache-heavy Claude Code sessions. For real cost use `gen_ai.usage.cost_usd` on the span
+(when Claude Code reports it), `claude_code.cost.usage` / `cost_usd` on the native `api_request` events (layer 2), or the official
+`cost_usd` of `claude.usage.daily` (layer 3).
+
+---
+
 <a id="validating"></a>
 ## 📊 Validating data in Dynatrace
 

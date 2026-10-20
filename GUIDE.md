@@ -180,6 +180,14 @@ Rodar o instalador de novo é seguro: ele atualiza a configuração, mantém hoo
 
 ---
 
+**Custo estimado no dashboard.** O dashboard *Developers AI Usage* calcula `cost_usd` dentro das queries, com a mesma fórmula do asset VS Code
+(mantida idêntica de propósito, para os dois assets mostrarem os mesmos números): `tokens de entrada × preço de entrada + tokens de saída × preço
+de saída`, com preços de tabela por família (`opus` 15/75, `sonnet` 3/15, `haiku` 0,80/4 USD por 1M tokens; outros nomes caem em 2/10). Como
+`gen_ai.usage.input_tokens` inclui leituras de cache, que a Anthropic cobra a ~10 % do preço de entrada, a estimativa é um **teto** e pode ser
+várias vezes a fatura em sessões de Claude Code com muito cache. Para custo real use `gen_ai.usage.cost_usd` no span (quando o Claude Code
+informa), `claude_code.cost.usage` / `cost_usd` dos eventos nativos `api_request` (camada 2) ou o `cost_usd` oficial de `claude.usage.daily`
+(camada 3).
+
 ## Validação
 
 ### 1. Processo local

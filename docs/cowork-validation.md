@@ -6,7 +6,7 @@ Leva cerca de 30 minutos: 10 do admin do claude.ai, 5 do admin Dynatrace, o rest
 
 > Não funciona com assinatura pessoal (Free, Pro, Max): essas contas não têm organização nem a área *Organization settings*. É por isso que a validação precisa ser feita na org do cliente.
 
-**Validado em 2026-10-20** numa org Team: eventos com `service.name = cowork`, `cowork.surface = remote`, `api_request` com tokens, custo, modelo e `user.email`; prompts chegam como `<REDACTED>`; só logs, sem spans nem métricas.
+**Validado em 2026-10-20** numa org Team, pelo claude.ai web e pelo app Desktop (tarefa Cowork com pasta local, que no Team roda como sessão na nuvem com a pasta compartilhada): eventos com `service.name = cowork`, `cowork.surface = remote`, `api_request` com tokens, custo, modelo e `user.email`; prompts chegam como `<REDACTED>`; só logs, sem spans nem métricas.
 
 Fonte: [Monitor Claude Cowork activity with OpenTelemetry](https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry) (Anthropic).
 
@@ -71,6 +71,7 @@ Se o passo 1 mostra eventos mas o passo 3 vem vazio, o Cowork nomeia os campos d
 |---|---|---|
 | Nada chega | prefixo `dt0c01.` duplicado no header (o caso mais comum: digitar `dt0c01.` e colar o token que já começa com ele) | redigitar o header: `Authorization=Api-Token ` + token colado |
 | Nada chega, passo 4 mostra `rejected > 0` | protocolo HTTP/JSON, ou endpoint com `/v1/logs` duplicado | trocar para HTTP/protobuf; usar a URL base |
+| Teste "local" no Desktop não gera evento | a sessão não chegou a rodar: com *Chat and Cowork unified* ligado a aba Cowork some; trocar de conta logo após enviar encerra a sessão | rodar pela aba Cowork (ou Home), esperar a resposta terminar antes de trocar de conta; `~/Library/Logs/Claude/main.log` mostra `grantRemoteSessionFolders` quando a tarefa com pasta local começa |
 | Usuário mandou só chat | sem o *Chat and Cowork unified* ligado, o chat não exporta | ligar o toggle em Organization settings → Chat, ou testar com uma tarefa Cowork |
 | Nada chega, `received = 0` | token sem `logs.ingest`, host `.apps.`, ou Desktop abaixo da versão mínima | regerar token; usar `.live.`; atualizar o Desktop |
 | Eventos chegam, `fetch logs` vazio para quem consulta | grupo IAM sem leitura do bucket `default_logs` | política IAM de leitura no bucket |

@@ -29,7 +29,7 @@ Diagrams: [one-page overview](docs/overview.svg) · [data collection architectur
 | **`claude` CLI in a terminal** | ✅ same (`service.name = claude-code`) | ✅ as `claude_code` |
 | **VS Code / Cursor** | ✅ same hook (this installer or the VS Code asset) | ✅ as `claude_code` |
 | **Claude Code on the web** (Anthropic cloud) | ⚠️ only native metrics/logs, if the cloud environment sets the `OTEL_*` variables (endpoint = `https://<tenant>.live.dynatrace.com/api/v2/otlp`, token in `OTEL_EXPORTER_OTLP_HEADERS`, `http/protobuf`; no local collector, so no redaction or `user.email` stamping) | ✅ as `claude_code` (remote) |
-| **Cowork** (local Desktop sessions and cloud sessions on desktop, web, mobile) | ✅ admin-configured OTel export, Team and Enterprise (**validated 2026-10-20**): logs with `service.name = cowork`, `api_request` with model, tokens, cost and user e-mail, same schema as layer 2; no hooks, so no `gen_ai` spans. See [Cowork telemetry](#cowork-telemetry) | ✅ as `cowork` (Enterprise usage-based); Team CSV: **overage only** |
+| **Cowork** (local Desktop sessions and cloud sessions on desktop, web, mobile) | ✅ admin-configured OTel export, Team and Enterprise (**validated 2026-10-20** from claude.ai web and from the Desktop app): logs with `service.name = cowork`, `api_request` with model, tokens, cost and user e-mail, same schema as layer 2; no hooks, so no `gen_ai` spans. See [Cowork telemetry](#cowork-telemetry) | ✅ as `cowork` (Enterprise usage-based); Team CSV: **overage only** |
 | **claude.ai chat, Design** (web and Desktop chat) | ❌ no hooks, no OTel. ✅ with *Chat and Cowork unified* turned on (beta toggle on Team and Enterprise): chats run as Cowork sessions and arrive through the Cowork OTel export (**validated on Team, 2026-10-20**) | ✅ as `chat` / `design` (Enterprise usage-based). Team and seat-based Enterprise: spend CSV with **overage only** (spend beyond the seat allotment; empty when extra usage is off), so this is a partial picture, not total consumption |
 | **Personal Pro / Max subscription** | ✅ on an instrumented machine | ❌ Anthropic exposes no API for personal plans |
 | **Claude via Bedrock, Vertex, Foundry** | ✅ hooks still work for Claude Code | ❌ use the cloud provider's billing |
@@ -292,7 +292,7 @@ Notes:
 
 Cowork sessions (local ones in the Desktop app and cloud ones started from desktop, web or mobile) do not run the Claude Code hook, but Anthropic exports their events over OpenTelemetry when a claude.ai admin configures an OTLP endpoint. Nothing is exported until that is done. Source: [Monitor Claude Cowork activity with OpenTelemetry](https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry).
 
-**Validated on 2026-10-20** with a Claude Team org pointed at a Dynatrace SaaS tenant: cloud sessions from claude.ai web (unified chat and Cowork) arrived as log records with tokens, cost, model and user e-mail. Step-by-step runbook (pt-BR) with the DQL files in [`docs/dql/`](docs/dql/): [docs/cowork-validation.md](docs/cowork-validation.md).
+**Validated on 2026-10-20** with a Claude Team org pointed at a Dynatrace SaaS tenant: sessions from claude.ai web (unified chat and Cowork) and Cowork tasks started in the Claude Desktop app with a local folder arrived as log records with tokens, cost, model and user e-mail. Step-by-step runbook (pt-BR) with the DQL files in [`docs/dql/`](docs/dql/): [docs/cowork-validation.md](docs/cowork-validation.md).
 
 | Item | Value |
 |---|---|
@@ -304,7 +304,7 @@ Cowork sessions (local ones in the Desktop app and cloud ones started from deskt
 | Resource attributes | optional, e.g. `deployment.environment=validation,claude.org=<org>`; they arrive as log attributes and help filter |
 | Signal | **logs only** (`/api/v2/otlp/v1/logs`); no spans, no metrics |
 | `service.name` | `cowork` (scope `com.anthropic.claude_code.events`, `service.version` = Claude Agent SDK version) |
-| Where the session ran | `cowork.surface` (`remote` = cloud session; local Desktop sessions are expected as a separate value) |
+| Where the session ran | `cowork.surface`. `remote` = the agent ran on Anthropic's cloud. On a Team org this includes Cowork tasks started **from the Desktop app with a local folder**: the Desktop creates a cloud session and shares the folder with it (validated 2026-10-20, Desktop 2.42304.2). A task running entirely in the Desktop's local VM was not observed in that setup |
 | Events seen | `api_request`, `user_prompt`, `assistant_response`, `tool_decision`, `tool_result`, `mcp_server_connection`, `plugin_loaded`, `hook_*`, `managed_settings_resolved`, `permission_mode_changed` — same names and fields as Claude Code's native telemetry (layer 2) |
 | `api_request` fields | `model`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens` (+ `_5m` / `_1h`), `cost_usd`, `cost_usd_micros`, `duration_ms`, `ttft_ms`, `effort`, `speed`, `query_source`, `session.id`, `prompt.id`, `request_id` |
 | Identity | `user.email`, `user.account_uuid`, `user.id`, `organization.id` always present |

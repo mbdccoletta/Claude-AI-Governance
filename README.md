@@ -230,7 +230,7 @@ Then type a prompt in a Claude Code session and run the health-check query in [d
 
 | Key | Value | Purpose |
 |---|---|---|
-| `squad` | `platform` | Filter by team in Dynatrace |
+| `squad` | `platform` | Filter by team in Dynatrace; `--squad` also writes the same value as `user.team`, the key the shared *Developers AI Usage* dashboard (this asset and the VS Code asset) groups by in "Custo por time" / "Uso por time" |
 | `cost_center` | `cc-1234` | Chargeback reporting |
 | `project` | `migration-v2` | Project-level attribution |
 
@@ -492,6 +492,13 @@ test/run-local-test.sh --tarball ./otelcol-contrib_0.163.1_darwin_arm64.tar.gz -
 | Evals | `src/evals.ts`: *Configurar Evals* / *Rodar Evals* commands run `npx @dynatrace-oss/dt-evals` in a terminal (evaluator pick list, since 30m–24h, sample 10–100 %) | `evals/run-evals.sh` / `.ps1`: same CLI, evaluators and choices; config generated for this asset's span layout, prompt-capture check, y/N before paid runs |
 
 Both can coexist on one machine: they write the same `~/.claude/otel-hook.py` and the hook follows whichever collector port is in `otel-attrs.json`. Running two collectors at once is pointless; keep one.
+
+**Same dashboard, same data.** Spans from this asset carry the attributes the VS Code asset's *Developers AI Usage* dashboard queries
+(`gen_ai.provider.name = "anthropic"`, `gen_ai.request.model`, `gen_ai.operation.name = "chat"`, `gen_ai.conversation.id`,
+`gen_ai.usage.*`, `user.email`, `user.team`), so machines instrumented by either asset land in the same tiles, in the same tenant.
+Two things to know when you open the VS Code asset's copy of the dashboard: its `Provider` / `Modelo` variables default to
+`gcp.vertex_ai` / `github` / `openai` and older model names, so select `anthropic` and the Claude models once (the Claude-only copy in
+`Dashboard/` defaults to them); and its "por time" tiles group by `user.team`, which this asset writes from `--squad` (also kept as `squad`).
 
 The `connector/` folder in this repository is a separate component (Claude usage connector for the Anthropic admin / usage APIs) with its own README.
 

@@ -74,7 +74,7 @@ while [ $# -gt 0 ]; do
     --endpoint) ENDPOINT="$2"; shift 2 ;;
     --token) TOKEN="$2"; shift 2 ;;
     --email) EMAIL="$2"; shift 2 ;;
-    --squad) SQUAD="$2"; shift 2 ;;
+    --squad|--team) SQUAD="$2"; shift 2 ;;
     --cost-center) COST_CENTER="$2"; shift 2 ;;
     --attr) EXTRA_ATTRS+=("$2"); shift 2 ;;
     --environment) ENVIRONMENT="$2"; shift 2 ;;
@@ -160,7 +160,7 @@ if [ "$NON_INTERACTIVE" = 0 ]; then
   [ -n "$COST_CENTER" ] || read -r -p "Cost center (optional): " COST_CENTER
 fi
 ATTRS=()
-[ -n "$SQUAD" ] && ATTRS+=("squad=$SQUAD")
+[ -n "$SQUAD" ] && ATTRS+=("squad=$SQUAD" "user.team=$SQUAD")   # user.team: the key the shared "Developers AI Usage" dashboard (VS Code asset) groups by
 [ -n "$COST_CENTER" ] && ATTRS+=("cost_center=$COST_CENTER")
 ATTRS+=("${EXTRA_ATTRS[@]+"${EXTRA_ATTRS[@]}"}")
 

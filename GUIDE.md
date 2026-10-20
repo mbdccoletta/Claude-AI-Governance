@@ -317,7 +317,7 @@ Para ver por desenvolvedor/squad, faça join com os spans do hook por `trace_id`
 
 ## Atributos customizados
 
-`--squad`, `--cost-center` e `--attr chave=valor` viram atributos de recurso em todos os sinais (via coletor) e atributos de span nos spans do hook (via `otel-attrs.json`). Chaves começando com `_` são reservadas (`_capture_prompts`, `_collector_port`). Para alterar, rode o instalador de novo com os novos valores.
+`--squad`, `--cost-center` e `--attr chave=valor` viram atributos de recurso em todos os sinais (via coletor), atributos de span nos spans do hook (via `otel-attrs.json`) e, desde a 1.0.1, dimensões das métricas nativas. `--squad` grava o mesmo valor também como `user.team`, a chave pela qual o dashboard *Developers AI Usage* (deste asset e do asset VS Code) agrupa em "Custo por time" / "Uso por time"; assim as máquinas instrumentadas por qualquer um dos dois assets caem nas mesmas tiles, no mesmo tenant. No dashboard do asset VS Code, selecione uma vez `anthropic` e os modelos Claude nas variáveis `Provider` / `Modelo` (os padrões dele são outros provedores). Chaves começando com `_` são reservadas (`_capture_prompts`, `_collector_port`). Para alterar, rode o instalador de novo com os novos valores.
 
 ---
 

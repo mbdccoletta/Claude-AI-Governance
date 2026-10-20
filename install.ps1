@@ -109,7 +109,7 @@ if (-not $NonInteractive) {
     if (-not $CostCenter) { $CostCenter = Read-Host 'Cost center (optional)' }
 }
 $attrs = @()
-if ($Squad)      { $attrs += "squad=$Squad" }
+if ($Squad)      { $attrs += "squad=$Squad"; $attrs += "user.team=$Squad" }   # user.team: the key the shared "Developers AI Usage" dashboard groups by
 if ($CostCenter) { $attrs += "cost_center=$CostCenter" }
 $attrs += $Attr
 

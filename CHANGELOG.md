@@ -54,6 +54,11 @@ re-run the installer and `connector/deploy/deploy.sh` to pick everything up.
 - Re-install: waits for the previous collector to exit, probes ports with `SO_REUSEADDR` and retries the default port briefly, so a
   re-install no longer drifts silently to 4319.
 
+### Shared dashboard compatibility
+- `--squad` / `-Squad` now also writes `user.team` (same value), the key the *Developers AI Usage* dashboard of the VS Code asset — and this
+  asset's Claude-only copy — groups by in "Custo por time" / "Uso por time"; those tiles were empty for machines instrumented by this asset.
+  `--team` accepted as an alias. Verified on a real tenant with the VS Code dashboard's own query.
+
 ### P4 · developer dimensions on the native metrics
 - New `transform/metric_dimensions` (after the `resource` processor in the metrics pipeline) copies `user.email`,
   `deployment.environment` and every custom attribute (`squad`, `cost_center`, `--attr …`) from the resource onto each datapoint, so

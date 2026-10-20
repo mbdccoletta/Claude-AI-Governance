@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- docs: with *Chat and Cowork unified* on, only conversations that move to the cloud workspace (code, files, longer tasks) are exported; a plain Q&A stays a classic chat and is not exported (tested 2026-10-20). Matrix, recommendation and runbook corrected.
 - docs: unified chat also validated from the Claude Desktop app (conversation with an attached folder: every prompt and model call exported, including the session-title call on claude-haiku-5-5).
 - docs: the *Chat and Cowork unified* toggle lives under Organization settings → **Capabilities (Recursos) → Chat** (path corrected); two pt-BR admin screenshots added (Monitoring, unified toggle), tenant host and org masked.
 - docs: chat-mode matrix (unified on/off × Cowork/chat), recommendation and customer caveats for *Chat and Cowork unified*, and six redacted screenshots (`docs/images/cowork/`) in README, GUIDE and the validation runbook; note that the dashboard's Cowork section fills from these events.

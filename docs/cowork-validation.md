@@ -55,7 +55,7 @@ Alternativa quando o cliente não quer o token no console da Anthropic ou precis
 | *Chat and Cowork unified* | O que exporta |
 |---|---|
 | Desligado (seletor Chat \| Cowork no Desktop) | só Cowork |
-| Ligado (beta, Home única) | Cowork **e** chat |
+| Ligado (beta, Home única) | Cowork **e** o chat que usa o espaço de trabalho na nuvem (código, arquivos); pergunta simples não exporta |
 
 Para medir tudo, ligue em Organization settings → Recursos (Capabilities) → Chat, depois de alinhar com o cliente (beta, muda a experiência dos usuários, revisão de segurança).
 

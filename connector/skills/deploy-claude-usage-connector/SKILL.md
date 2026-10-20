@@ -64,16 +64,21 @@ and read the entry, so the workflow input `credential_name` is enough — no id 
 Credential type **Token**, that exact **Name**, Credential scope **AppEngine** (leaves "Dynatrace apps with access" = All applications),
 toggle **Allow access without app context, for example, from ad hoc functions in Workflows** ON, **Owner access only** ON
 (the owner must be the workflow owner; the UI refuses the toggle ON + owner-only OFF + empty user list). Paste the Anthropic key in **Token**.
-The scripted path differs: `deploy/vault_upsert.js` creates/updates the entry with `ownerAccessOnly: false` (shared with all AppEngine
-consumers) because the dtctl actor is usually not the workflow owner. Running `deploy.sh` without `--skip-vault` on an entry created in the UI
-with owner-only ON flips it to shared; tell the user and let them set it back in the UI if their policy requires it.
+The scripted path (`deploy/vault_upsert.js`, run by `deploy.sh` step 2) creates/updates the entry with `ownerAccessOnly: true` as well:
+the owner is then the dtctl actor, who is also the actor that applies the workflow in step 3, so the workflow can read it. If the workflow
+owner is going to be someone else (for example the credential is created by an admin and the workflow by a user), create the credential in
+the UI as above and run `deploy.sh --skip-vault`. The key is piped to dtctl on stdin — never on a command line or in a file.
 Claude must not type the key itself; it can fill every other field in the user's browser and let the user paste + Save.
 
 ## One-off runs with other inputs
 
 `dtctl exec workflow <id> --input '{"console_lookback_days": 31}' --wait --show-results` — run params override the workflow
-input for that execution only (resolve_config merges defaults <- input <- params). Task result fields: `api_calls`, pages, rows,
-`events`, `ingested`. `events: 0` with all calls OK means the org had no usage in the window (verified: 32 calls, 0 rows on an idle org).
+input for that execution only, and **only** for `enterprise_lookback_days`, `console_lookback_days`, `console_include_api_usage`,
+`dry_run` and `console_debug`; `org_type`, `credential_*`, `anthropic_base_url`, `org_id` and the batch/budget knobs come from the
+workflow input alone (anything else in the params is ignored and logged by `resolve_config`). Task result fields: `api_calls`, pages, rows,
+`events`, `events_built`, `ingested`, `flushes`, `elapsed_ms`, `partial` (+ `reason` when true: the 95 s budget ran out and the next
+scheduled run completes the window). `events: 0` with all calls OK means the org had no usage in the window (verified: 32 calls, 0 rows
+on an idle org).
 
 ## Closed-bucket semantics (why "today" looks empty)
 

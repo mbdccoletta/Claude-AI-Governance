@@ -2,12 +2,13 @@
 // event.name == "api_request") per developer per UTC day, last 7 days.
 // Layer 2 attribute names follow the Claude Code OTel log export: user.email, model, input_tokens, output_tokens,
 // cache_read_tokens, cache_creation_tokens, cost_usd. Adjust the right side if layer 2 renames them.
+// usage.date is a UTC day: every formatTimestamp() here is pinned to timezone: "UTC" so the viewer's zone never shifts a day.
 // Expect observed <= official for claude_code: hooks only see sessions that ran on instrumented machines,
 // and the official number also covers claude.ai Claude Code on the web.
 fetch bizevents, from: now() - 10d
-| filter event.type == "claude.usage.daily"
-| filter coalesce(org.id, "") != "demo-sample"  // drop the sample.csv demo rows and product == "claude_code"
-| filter usage.date >= formatTimestamp(now() - 7d, format: "yyyy-MM-dd")
+| filter event.type == "claude.usage.daily" and product == "claude_code"  // layer 2 only sees Claude Code: compare like with like
+| filter coalesce(org.id, "") != "demo-sample"  // drop the sample.csv demo rows
+| filter usage.date >= formatTimestamp(now() - 7d, format: "yyyy-MM-dd", timezone: "UTC")
 | dedup dedup.key, sort: {timestamp desc}
 | summarize {
     official_tokens = sum(tokens.total),
@@ -15,8 +16,8 @@ fetch bizevents, from: now() - 10d
   }, by: {user.email, usage.date}
 | join [
     fetch logs, from: now() - 7d
-    | filter event.name == "api_request"
-    | fieldsAdd usage.date = formatTimestamp(timestamp, format: "yyyy-MM-dd")
+    | filter event.name == "api_request" and in(service.name, {"claude-code", "claude-code-desktop"})  // Claude Code OTel export only
+    | fieldsAdd usage.date = formatTimestamp(timestamp, format: "yyyy-MM-dd", timezone: "UTC")
     | summarize {
         observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)),
         observed_cost_usd = sum(toDouble(cost_usd)),

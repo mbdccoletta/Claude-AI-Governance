@@ -5,6 +5,9 @@
 //   GET /v1/organizations/usage_report/messages?bucket_width=1d&group_by[]=model&group_by[]=workspace_id
 //       org-level token usage -> product=api, user.email=null, api.workspace_id set (no per-user data exists here);
 //       1d buckets for past days + 1h buckets for today, because the API only returns closed buckets
+// Time budget: paging stops at cfg.time_budget_ms (default 95 s of the 110 s task timeout); the accumulator is flushed
+// when less than the reserve is left and once at the end; the summary carries { partial: true, reason } when the
+// window was not fully read (the next scheduled run re-reads the lookback window; dedup.key keeps the newest record).
 import { result } from "@dynatrace-sdk/automation-utils";
 import { credentialVaultClient, businessEventsClient } from "@dynatrace-sdk/client-classic-environment-v2";
 
@@ -20,7 +23,9 @@ export default async function () {
 
   const log = (m) => console.log(`[console] ${m}`);
   const apiKey = await resolveApiKey(credentialVaultClient, cfg.credential_id, cfg.credential_name);
-  const client = makeAnthropicClient({ baseUrl: cfg.anthropic_base_url, apiKey, log });
+  const deadline = Date.now() + cfg.time_budget_ms;
+  const reserveMs = flushReserveMs(cfg.time_budget_ms);
+  const client = makeAnthropicClient({ baseUrl: cfg.anthropic_base_url, apiKey, log, deadline });
 
   const now = new Date();
   const days = [];
@@ -29,8 +34,14 @@ export default async function () {
 
   const acc = makeAccumulator();
   let orgId = cfg.org_id ?? null;
-  const stats = { claude_code_rows: 0, claude_code_pages: 0, api_rows: 0, api_pages: 0 };
+  const stats = { claude_code_rows: 0, claude_code_pages: 0, api_rows: 0, api_pages: 0, flushes: 0, ingested: 0, events_built: 0 };
   const today = utcDay(daysAgo(0, now));
+  const sample = [];
+  const flush = () => flushAccumulator(acc, {
+    build: (f) => ({ ...f, orgId, extra: { ...f.extra, ...(f.userId ? { "user.id": f.userId } : {}) } }),
+    businessEventsClient, batchSize: cfg.ingest_batch_size, log, dryRun: cfg.dry_run, stats, sampleOut: sample,
+  });
+  const maybeFlush = async () => { if (client.remainingMs() < reserveMs && acc.dirtySize) { log(`budget low (${client.remainingMs()} ms left): flushing ${acc.dirtySize} entries`); await flush(); } };
 
   // --- Claude Code per-user rows (one call chain per day) -------------------
   for (const day of days) {
@@ -41,11 +52,11 @@ export default async function () {
         orgId = orgId ?? row.organization_id ?? null;
         const rowDay = (row.date ?? day).slice(0, 10);
         const actor = row.actor ?? {};
-        const email = actor.type === "api_actor" ? `apikey:${actor.api_key_name ?? "unknown"}` : (actor.email_address ?? "unknown");
+        const who = actorFields(actor);
         const cm = row.core_metrics ?? {};
         for (const mb of row.model_breakdown ?? []) {
           acc.add({
-            email,
+            ...who,
             product: "claude_code",
             model: mb.model,
             date: rowDay,
@@ -84,7 +95,9 @@ export default async function () {
           });
         }
       }
+      await maybeFlush();
     }
+    if (client.partial) break; // deadline/page cap: do not start the next day's cursor chain
   }
 
   // --- optional: org-level API usage by model + workspace (product=api) -----
@@ -129,16 +142,32 @@ export default async function () {
             });
           }
         }
+        await maybeFlush();
       }
     }
   }
 
-  const events = [];
-  for (const f of acc.values()) events.push(await buildEvent({ ...f, orgId }));
-  const sent = await ingestEvents(events, { businessEventsClient, batchSize: cfg.ingest_batch_size, log, dryRun: cfg.dry_run });
-  const summary = { source: SOURCE, events: events.length, ingested: cfg.dry_run ? 0 : sent, api_calls: client.calls, org_id: orgId, days, ...stats };
+  await flush();
+  const partial = client.partial;
+  const summary = {
+    source: SOURCE, events: acc.size, ingested: stats.ingested, api_calls: client.calls, org_id: orgId, days,
+    time_budget_ms: cfg.time_budget_ms, elapsed_ms: Date.now() - (deadline - cfg.time_budget_ms),
+    partial: Boolean(partial), ...(partial ? { reason: partial.reason } : {}),
+    ...stats,
+  };
   log(JSON.stringify(summary));
-  return cfg.dry_run ? { ...summary, sample: events.slice(0, 3) } : summary;
+  return cfg.dry_run ? { ...summary, sample } : summary;
+}
+
+// user_actor rows: user.email from email_address; without it fall back to a stable `user:<user_id>` dedup key
+// (user.email stays null, user.id is set) exactly like the Enterprise adapter, else "unknown-user".
+// api_actor rows (CI keys etc.): user.email = "apikey:<api_key_name>".
+function actorFields(actor) {
+  if (actor.type === "api_actor") return { email: `apikey:${actor.api_key_name ?? "unknown"}` };
+  const email = actor.email_address ?? actor.email ?? null;
+  const userId = actor.user_id ?? actor.account_uuid ?? null;
+  if (email) return { email, userId };
+  return { email: null, userId, keyFallback: userId ? `user:${userId}` : "unknown-user" };
 }
 
 function sumTool(toolActions, field) {

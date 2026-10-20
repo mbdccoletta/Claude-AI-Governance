@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Deploy the Claude usage connector (layer 3) to the CURRENT dtctl context, end to end:
 #   1. outbound allowlist: add api.anthropic.com to builtin:dt-javascript-runtime.allowed-outbound-connections (merge, never overwrite)
-#   2. credential vault: upsert a TOKEN credential with the Anthropic key (via dtctl exec function, key never written to disk)
+#   2. credential vault: upsert a TOKEN credential with the Anthropic key (ownerAccessOnly, via dtctl exec function; the key is read
+#      from the env var and piped to dtctl on stdin — never on a command line, never in a file)
 #      (needs environment-api:credentials:* on the dtctl token; with --skip-vault the workflow finds the entry by NAME, --credential-name,
 #       or by CREDENTIAL_ID env)
-#   3. workflow: render inputs + `dtctl apply --write-id` (idempotent re-deploys through deploy/.out/*.json)
+#   3. workflow: render inputs (private by default) + `dtctl apply` (idempotent re-deploys through deploy/.out/*.json, id stamped locally)
 #   4. optional: run once now and show the execution log, then verify with a DQL count per source
 #
 # Nothing is mutated without --yes. Dry mode (default) prints the plan and the exact dtctl commands.
@@ -13,13 +14,14 @@
 #   export ANTHROPIC_USAGE_KEY='sk-ant-...'            # Enterprise: Analytics API key | Console: Admin API key (sk-ant-admin01-...)
 #   deploy/deploy.sh --org-type console --org-id acme [--context <dtctl ctx>] [--run-now] --yes
 #   deploy/deploy.sh --org-type team --yes             # no key, no allowlist: only the reminder workflow
-# Options: --title <workflow title> --credential-name <name> --skip-allowlist --skip-vault --skip-workflow --key-env <VAR> --private
+# Options: --title <workflow title> --credential-name <name> --skip-allowlist --skip-vault --skip-workflow --key-env <VAR>
+#          --public (workflow isPrivate=false; default is private) — --private is accepted as a no-op
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 OUT="$HERE/.out"; mkdir -p "$OUT"
 
-ORG_TYPE=""; ORG_ID=""; CTX=""; YES=0; RUN_NOW=0; PRIVATE=""
+ORG_TYPE=""; ORG_ID=""; CTX=""; YES=0; RUN_NOW=0; VISIBILITY=""
 SKIP_ALLOW=0; SKIP_VAULT=0; SKIP_WF=0
 KEY_ENV="ANTHROPIC_USAGE_KEY"
 CRED_NAME=""; TITLE=""
@@ -38,7 +40,8 @@ while [ $# -gt 0 ]; do
     --skip-vault) SKIP_VAULT=1; shift;;
     --skip-workflow) SKIP_WF=1; shift;;
     --run-now) RUN_NOW=1; shift;;
-    --private) PRIVATE="--private"; shift;;
+    --private) shift;;                      # default
+    --public) VISIBILITY="--public"; shift;;
     --yes) YES=1; shift;;
     -h|--help) sed -n 2,16p "$0"; exit 0;;
     *) echo "unknown option $1" >&2; exit 2;;
@@ -60,15 +63,33 @@ if [ "$SKIP_ALLOW" = 0 ]; then
   echo "== 1/4 outbound allowlist: ensure $HOST in $SCHEMA"
   if [ "$YES" = 1 ]; then
     rm -f "$OUT/allowlist.json"
+    # two steps (not one pipeline) so a dtctl failure is never mistaken for merge_allowlist's "create" (rc 3)
     set +e
-    "${DT[@]}" get settings --schema "$SCHEMA" -o json 2>/dev/null | python3 "$HERE/merge_allowlist.py" "$HOST" --out "$OUT/allowlist.json"; rc=$?
+    "${DT[@]}" get settings --schema "$SCHEMA" -o json >"$OUT/allowlist-current.json" 2>"$OUT/allowlist.stderr"; drc=$?
     set -e
-    if [ $rc = 3 ]; then
-      printf '{"allowedOutboundConnections":{"enforced":true,"hostList":["%s"]}}\n' "$HOST" > "$OUT/allowlist-value.json"
-      run "${DT[@]}" create settings -f "$OUT/allowlist-value.json" --schema "$SCHEMA" --scope environment
-    elif [ -f "$OUT/allowlist.json" ] && [ $rc = 0 ] && grep -q "$HOST" "$OUT/allowlist.json"; then
-      run "${DT[@]}" apply -f "$OUT/allowlist.json"
+    if [ $drc != 0 ]; then
+      echo "allowlist step failed: dtctl get settings --schema $SCHEMA returned rc=$drc (missing settings:read scope? wrong context?)" >&2
+      cat "$OUT/allowlist.stderr" >&2
+      exit 1
     fi
+    set +e
+    python3 "$HERE/merge_allowlist.py" "$HOST" --out "$OUT/allowlist.json" <"$OUT/allowlist-current.json"; rc=$?
+    set -e
+    case $rc in
+      3)
+        printf '{"allowedOutboundConnections":{"enforced":true,"hostList":["%s"]}}\n' "$HOST" > "$OUT/allowlist-value.json"
+        run "${DT[@]}" create settings -f "$OUT/allowlist-value.json" --schema "$SCHEMA" --scope environment;;
+      0)
+        if [ -f "$OUT/allowlist.json" ] && grep -q "$HOST" "$OUT/allowlist.json"; then
+          run "${DT[@]}" apply -f "$OUT/allowlist.json"
+        fi
+        if grep -q '"enforced": *false' "$OUT/allowlist-current.json" "$OUT/allowlist.json" 2>/dev/null; then
+          echo "   WARNING: the outbound allowlist is not enforced (enforced=false) — any host is reachable from workflow tasks; enable enforcement in Settings > Preferences > Allowed outbound connections" >&2
+        fi;;
+      *)
+        echo "allowlist step failed: merge_allowlist.py returned rc=$rc (see output above); not continuing" >&2
+        exit 1;;
+    esac
   else
     echo "+ dtctl get settings --schema $SCHEMA -o json | python3 deploy/merge_allowlist.py $HOST --out deploy/.out/allowlist.json && dtctl apply -f deploy/.out/allowlist.json"
   fi
@@ -77,17 +98,18 @@ fi
 # ---- 2. credential vault ------------------------------------------------------
 CRED_ID=""
 if [ "$SKIP_VAULT" = 0 ]; then
-  echo "== 2/4 credential vault: upsert TOKEN credential \"$CRED_NAME\" from env $KEY_ENV"
-  KEY="${!KEY_ENV:-}"
-  if [ -z "$KEY" ]; then echo "env var $KEY_ENV is empty — export the Anthropic key first (never paste it into chat or files)" >&2; [ "$YES" = 1 ] && exit 2; fi
+  echo "== 2/4 credential vault: upsert TOKEN credential \"$CRED_NAME\" (ownerAccessOnly) from env $KEY_ENV"
+  if [ -z "${!KEY_ENV:-}" ]; then echo "env var $KEY_ENV is empty — export the Anthropic key first (never paste it into chat or files)" >&2; [ "$YES" = 1 ] && exit 2; fi
   if [ "$YES" = 1 ]; then
-    PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"name": sys.argv[1], "token": sys.argv[2]}))' "$CRED_NAME" "$KEY")
-    RES=$("${DT[@]}" exec function -f "$HERE/vault_upsert.js" --payload "$PAYLOAD" -o json)
+    # The key never appears on a command line (ps/argv) nor in a file: python reads it from the environment and
+    # writes the JSON payload to stdout, dtctl reads it from stdin (`--data -`, see `dtctl exec function --help`).
+    RES=$(CRED_NAME="$CRED_NAME" KEY_ENV="$KEY_ENV" python3 -c 'import json,os,sys; sys.stdout.write(json.dumps({"name": os.environ["CRED_NAME"], "token": os.environ[os.environ["KEY_ENV"]]}))' \
+          | "${DT[@]}" exec function -f "$HERE/vault_upsert.js" --data - -o json)
     CRED_ID=$(printf '%s' "$RES" | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d.get("result",d); print(d.get("id",""))')
     [ -n "$CRED_ID" ] || { echo "could not read credential id from: $RES" >&2; exit 1; }
     echo "   credential id: $CRED_ID ($(printf '%s' "$RES" | grep -o '"created":[a-z]*'))"
   else
-    echo "+ dtctl exec function -f deploy/vault_upsert.js --payload '{\"name\":\"$CRED_NAME\",\"token\":\"\$$KEY_ENV\"}' -o json   # -> CREDENTIALS_VAULT-..."
+    echo "+ python3 -c '<json {name, token: \$$KEY_ENV from env}>' | dtctl exec function -f deploy/vault_upsert.js --data - -o json   # -> CREDENTIALS_VAULT-..."
     CRED_ID="CREDENTIALS_VAULT-DRYRUN"
   fi
 else
@@ -96,11 +118,11 @@ fi
 
 # ---- 3. workflow -------------------------------------------------------------
 if [ "$SKIP_WF" = 0 ]; then
-  echo "== 3/4 workflow: render + apply (schedule 15:00 UTC daily)"
+  echo "== 3/4 workflow: render + apply (schedule 15:00 UTC daily, $([ -n "$VISIBILITY" ] && echo public || echo private))"
   WF_OUT="$OUT/claude-usage-connector.$ORG_TYPE.json"
   ID_ARG=(); [ -f "$WF_OUT" ] && EXISTING=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("id",""))' "$WF_OUT") || EXISTING=""
   [ -n "${EXISTING:-}" ] && ID_ARG=(--id "$EXISTING")
-  python3 "$HERE/render_workflow.py" --org-type "$ORG_TYPE" --credential-id "$CRED_ID" --org-id "$ORG_ID" --out "$WF_OUT" --title "$TITLE" --credential-name "$CRED_NAME" $PRIVATE ${ID_ARG[@]+"${ID_ARG[@]}"} >/dev/null
+  python3 "$HERE/render_workflow.py" --org-type "$ORG_TYPE" --credential-id "$CRED_ID" --org-id "$ORG_ID" --out "$WF_OUT" --title "$TITLE" --credential-name "$CRED_NAME" $VISIBILITY ${ID_ARG[@]+"${ID_ARG[@]}"} >/dev/null
   echo "   rendered $WF_OUT${EXISTING:+ (update of $EXISTING)}"
   if [ "$YES" = 1 ]; then
     echo "+ ${DT[*]} apply -f $WF_OUT -o json"

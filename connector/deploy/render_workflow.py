@@ -2,7 +2,9 @@
 """Render the built workflow JSON with deployment-specific inputs filled in.
 
 python3 deploy/render_workflow.py --org-type console --credential-id CREDENTIALS_VAULT-ABC --org-id acme \
-        --out deploy/.out/claude-usage-connector.console.json [--id <existing workflow id>] [--title ...]
+        --out deploy/.out/claude-usage-connector.console.json [--id <existing workflow id>] [--title ...] [--public]
+
+The rendered workflow is private by default (isPrivate: true); --public opts out.
 """
 import argparse
 import json
@@ -20,7 +22,8 @@ def main():
     ap.add_argument("--org-id", default="")
     ap.add_argument("--title", default=None)
     ap.add_argument("--id", default=None, help="existing workflow id (update in place)")
-    ap.add_argument("--private", action="store_true")
+    ap.add_argument("--public", action="store_true", help="isPrivate=false (default: private — the inputs name the credential and base URL)")
+    ap.add_argument("--private", action="store_true", help="kept for compatibility; private is the default")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -34,7 +37,7 @@ def main():
         wf["title"] = a.title
     if a.id:
         wf["id"] = a.id
-    wf["isPrivate"] = bool(a.private)
+    wf["isPrivate"] = not a.public
     if a.org_type != "team" and not (a.credential_id or a.credential_name):
         raise SystemExit("--credential-id or --credential-name is required for enterprise/console")
     out = pathlib.Path(a.out)

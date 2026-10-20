@@ -5,6 +5,9 @@
 // Both called with bucket_width=1d, group_by[]=product,model, limit=1000, for the last N complete UTC days
 // (default 10: Anthropic revises cost values until ~7 days after month end, so we re-read and let
 // DQL dedup keep the newest record per dedup.key).
+// Time budget: paging stops at cfg.time_budget_ms (default 95 s of the 110 s task timeout); the accumulator is flushed
+// to bizevents when less than the reserve is left and once at the end, so a big org still ingests something every run
+// and the summary says { partial: true, reason } when the window was not fully read (next run re-reads it anyway).
 import { result } from "@dynatrace-sdk/automation-utils";
 import { credentialVaultClient, businessEventsClient } from "@dynatrace-sdk/client-classic-environment-v2";
 
@@ -120,12 +123,38 @@ async function buildEvent(f) {
 
 // ---------------------------------------------------------------------------
 // Anthropic HTTP client: 60 req/min org-wide budget -> >= minIntervalMs between calls,
-// backoff on 429/5xx (honours Retry-After), 410 => cursor expired => restart from page 1.
+// backoff on 429/5xx (honours Retry-After, clamped to maxRetryAfterMs), 410 => cursor expired => restart from page 1.
 // Pagination never changes query params between pages; only `page` is appended.
+//
+// Time budget: the task runtime kills a task at `timeout` (110 s in build.py). Every call is serialized at >= 1.1 s,
+// so a large org (users x days x product x model rows, 1000 per page) cannot always be paged in one run. The client
+// therefore carries a `deadline` (default: now + 95 s) and a page cap (`maxPages`, default 200): paginate() stops
+// yielding when either is hit and records why in `client.partial` ({ reason, path, pages }). A back-off sleep that
+// would end after the deadline is not taken: the call is abandoned and the cursor sequence ends as partial too.
+// Callers flush what they have (see flushAccumulator) and report { partial: true, reason } so the next scheduled run,
+// which re-reads the whole window, completes the picture (dedup.key: newest record wins).
 // ---------------------------------------------------------------------------
-function makeAnthropicClient({ baseUrl, apiKey, log = console.log, minIntervalMs = 1100, maxRetries = 5 }) {
+const DEFAULT_TIME_BUDGET_MS = 95_000;
+const DEFAULT_MAX_PAGES = 200;
+const MAX_RETRY_AFTER_MS = 20_000;
+
+function makeAnthropicClient({
+  baseUrl, apiKey, log = console.log, minIntervalMs = 1100, maxRetries = 5,
+  deadline = Date.now() + DEFAULT_TIME_BUDGET_MS, maxPages = DEFAULT_MAX_PAGES, maxRetryAfterMs = MAX_RETRY_AFTER_MS,
+}) {
   let lastCallAt = 0;
   let calls = 0;
+  let partial = null; // { reason, path, pages } once the budget or the page cap stopped a cursor sequence
+
+  function remainingMs() {
+    return deadline - Date.now();
+  }
+
+  function budgetError(reason) {
+    const e = new Error(`time budget exhausted: ${reason}`);
+    e.budgetExceeded = true;
+    return e;
+  }
 
   async function get(path, params = {}) {
     const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : baseUrl + "/");
@@ -138,6 +167,7 @@ function makeAnthropicClient({ baseUrl, apiKey, log = console.log, minIntervalMs
     for (;;) {
       const wait = lastCallAt + minIntervalMs - Date.now();
       if (wait > 0) await sleep(wait);
+      if (remainingMs() <= 0) throw budgetError(`deadline reached before calling ${url.pathname}`);
       lastCallAt = Date.now();
       calls++;
       const res = await fetch(url.toString(), {
@@ -147,7 +177,11 @@ function makeAnthropicClient({ baseUrl, apiKey, log = console.log, minIntervalMs
       if (res.status === 429 || res.status >= 500) {
         if (attempt >= maxRetries) throw new Error(`HTTP ${res.status} on ${url.pathname} after ${attempt} retries`);
         const ra = Number(res.headers.get("retry-after"));
-        const delay = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(30000, 1000 * 2 ** attempt);
+        const delay = Number.isFinite(ra) && ra > 0 ? Math.min(maxRetryAfterMs, ra * 1000) : Math.min(30000, 1000 * 2 ** attempt);
+        if (delay >= remainingMs()) {
+          log(`[anthropic] ${res.status} on ${url.pathname}; backing off ${delay} ms would pass the deadline (${remainingMs()} ms left) — stopping here`);
+          throw budgetError(`retry of ${url.pathname} (${delay} ms back-off) does not fit in the remaining ${remainingMs()} ms`);
+        }
         log(`[anthropic] ${res.status} on ${url.pathname}; backing off ${delay} ms (attempt ${attempt + 1}/${maxRetries})`);
         await sleep(delay);
         attempt++;
@@ -163,16 +197,35 @@ function makeAnthropicClient({ baseUrl, apiKey, log = console.log, minIntervalMs
     }
   }
 
-  // Yields every page. Params are frozen for the whole cursor sequence (API requirement).
+  // Yields every page until the API says there is no more, the deadline passes or maxPages is reached.
+  // Params are frozen for the whole cursor sequence (API requirement). On a budget/page-cap stop the
+  // generator returns normally and `client.partial` is set; callers check it after the loop.
   async function* paginate(path, baseParams) {
     const frozen = Object.freeze({ ...baseParams });
     let page;
+    let pages = 0;
     let restarts = 0;
     for (;;) {
+      if (remainingMs() <= 0) {
+        const reason = `deadline reached after ${pages} page(s) of ${path}`;
+        partial = partial ?? { reason, path, pages };
+        log(`[anthropic] ${reason}${pages ? "" : " (not started)"}`);
+        return;
+      }
+      if (pages >= maxPages) {
+        const reason = `page cap ${maxPages} reached on ${path}`;
+        partial = partial ?? { reason, path, pages };
+        log(`[anthropic] ${reason}`);
+        return;
+      }
       let body;
       try {
         body = await get(path, page ? { ...frozen, page } : frozen);
       } catch (e) {
+        if (e && e.budgetExceeded) {
+          partial = partial ?? { reason: `${e.message} (after ${pages} page(s) of ${path})`, path, pages };
+          return;
+        }
         if (e && e.status === 410 && restarts < 1) {
           log(`[anthropic] cursor expired on ${path}; restarting from page 1`);
           restarts++;
@@ -181,13 +234,21 @@ function makeAnthropicClient({ baseUrl, apiKey, log = console.log, minIntervalMs
         }
         throw e;
       }
+      pages++;
       yield body;
       if (!body || !body.has_more || !body.next_page) return;
       page = body.next_page;
     }
   }
 
-  return { get, paginate, get calls() { return calls; } };
+  return {
+    get,
+    paginate,
+    remainingMs,
+    get calls() { return calls; },
+    get partial() { return partial; },
+    get deadline() { return deadline; },
+  };
 }
 
 // Resolve the Anthropic key from the credential vault: by id (CREDENTIALS_VAULT-...) or, when the id is empty,
@@ -208,31 +269,51 @@ async function resolveApiKey(credentialVaultClient, credentialId, credentialName
   return key;
 }
 
-// Ingest in batches (bizevents ingest limit is 5 MiB/request; 500 small events ~ 300 KB).
-async function ingestEvents(events, { businessEventsClient, batchSize = 500, log = console.log, dryRun = false }) {
+// Ingest in batches: by count (batchSize, default 500) AND by serialized size (maxBatchBytes, default 4 MiB —
+// the bizevents ingest limit is 5 MiB per request; 500 small events are ~300 KB, Console rows with claude_code.* extras are bigger).
+const MAX_BATCH_BYTES = 4 * 1024 * 1024;
+const _enc = new TextEncoder();
+
+async function ingestEvents(events, { businessEventsClient, batchSize = 500, maxBatchBytes = MAX_BATCH_BYTES, log = console.log, dryRun = false }) {
   let sent = 0;
-  for (let i = 0; i < events.length; i += batchSize) {
-    const batch = events.slice(i, i + batchSize);
+  let batch = [];
+  let bytes = 2; // "[" + "]"
+  async function flush() {
+    if (!batch.length) return;
     if (dryRun) {
-      log(`[ingest] dry-run: would send ${batch.length} events`);
+      log(`[ingest] dry-run: would send ${batch.length} events (${bytes} bytes)`);
     } else {
       await businessEventsClient.ingest({ body: batch, type: "application/json" });
     }
     sent += batch.length;
     log(`[ingest] ${sent}/${events.length} events`);
+    batch = [];
+    bytes = 2;
   }
+  for (const ev of events) {
+    const size = _enc.encode(JSON.stringify(ev)).length + 1; // + ","
+    if (batch.length && (batch.length >= batchSize || bytes + size > maxBatchBytes)) await flush();
+    batch.push(ev);
+    bytes += size;
+  }
+  await flush();
   return sent;
 }
 
 // Accumulator keyed by (email|product|model|date): sums tokens/cost over duplicate rows.
+// `requests` is summed only from rows that carry it (cost rows must pass requests: null, otherwise the
+// Enterprise cost report, which also returns `requests`, would double the usage-report count).
+// Tracks which keys changed since the last takeDirty() so incremental flushes re-send only updated entries.
 function makeAccumulator() {
   const map = new Map();
+  const dirty = new Set();
   function key(f) {
     return [f.email ?? f.keyFallback ?? "", normalizeProduct(f.product), f.model ?? "unknown", f.date].join("|");
   }
   return {
     add(f) {
       const k = key(f);
+      dirty.add(k);
       const cur = map.get(k);
       if (!cur) {
         map.set(k, { ...f, extra: { ...(f.extra ?? {}) } });
@@ -247,10 +328,43 @@ function makeAccumulator() {
     values() {
       return Array.from(map.values());
     },
+    // Entries added/changed since the previous takeDirty(); clears the dirty set.
+    takeDirty() {
+      const out = [];
+      for (const k of dirty) out.push(map.get(k));
+      dirty.clear();
+      return out;
+    },
     get size() {
       return map.size;
     },
+    get dirtySize() {
+      return dirty.size;
+    },
   };
+}
+
+// Incremental flush used by the tasks: build events for the dirty accumulator entries and ingest them.
+// Called when the remaining time budget drops under `reserveMs` and once at the end, so a run that hits the
+// deadline has already ingested most of what it paged. Re-sending a key later (with more rows merged in) is safe:
+// every DQL reader dedups by dedup.key keeping the newest record.
+// `build(f)` maps an accumulator entry to the buildEvent() input (adds orgId / extra fields per source).
+async function flushAccumulator(acc, { build, businessEventsClient, batchSize, log, dryRun, stats, sampleOut }) {
+  const entries = acc.takeDirty();
+  if (!entries.length) return 0;
+  const events = [];
+  for (const f of entries) events.push(await buildEvent(await build(f)));
+  if (sampleOut && sampleOut.length < 3) sampleOut.push(...events.slice(0, 3 - sampleOut.length));
+  const sent = await ingestEvents(events, { businessEventsClient, batchSize, log, dryRun });
+  stats.flushes = (stats.flushes ?? 0) + 1;
+  stats.ingested = (stats.ingested ?? 0) + (dryRun ? 0 : sent);
+  stats.events_built = (stats.events_built ?? 0) + events.length;
+  return sent;
+}
+
+// Reserve for the final flush: 15 s, or a quarter of the budget when the budget itself is small (tests).
+function flushReserveMs(budgetMs) {
+  return Math.min(15_000, Math.max(1_000, Math.floor(budgetMs / 4)));
 }
 
 
@@ -264,7 +378,9 @@ export default async function () {
 
   const log = (m) => console.log(`[enterprise] ${m}`);
   const apiKey = await resolveApiKey(credentialVaultClient, cfg.credential_id, cfg.credential_name);
-  const client = makeAnthropicClient({ baseUrl: cfg.anthropic_base_url, apiKey, log });
+  const deadline = Date.now() + cfg.time_budget_ms;
+  const reserveMs = flushReserveMs(cfg.time_budget_ms);
+  const client = makeAnthropicClient({ baseUrl: cfg.anthropic_base_url, apiKey, log, deadline });
 
   const now = new Date();
   const startingAt = daysAgo(cfg.enterprise_lookback_days, now).toISOString();
@@ -282,7 +398,14 @@ export default async function () {
   const acc = makeAccumulator();
   let refreshedAt = null;
   let orgId = cfg.org_id ?? null;
-  const stats = { cost_rows: 0, usage_rows: 0, cost_pages: 0, usage_pages: 0 };
+  const stats = { cost_rows: 0, usage_rows: 0, cost_pages: 0, usage_pages: 0, flushes: 0, ingested: 0, events_built: 0 };
+  const sample = [];
+  const flush = () => flushAccumulator(acc, {
+    build: (f) => ({ ...f, orgId, extra: { ...f.extra, "data.refreshed_at": refreshedAt, "user.id": f.userId ?? null } }),
+    businessEventsClient, batchSize: cfg.ingest_batch_size, log, dryRun: cfg.dry_run, stats, sampleOut: sample,
+  });
+  // flush early once the budget is nearly spent, so the final flush has little left to send
+  const maybeFlush = async () => { if (client.remainingMs() < reserveMs && acc.dirtySize) { log(`budget low (${client.remainingMs()} ms left): flushing ${acc.dirtySize} entries`); await flush(); } };
 
   // --- cost rows -----------------------------------------------------------
   for await (const page of client.paginate(COST_PATH, params)) {
@@ -299,7 +422,7 @@ export default async function () {
         date: day,
         source: SOURCE,
         costUsd: centsToUsd(row.amount),
-        requests: row.requests ?? null,
+        requests: null, // the cost report may also carry `requests`; counting it here would double the usage-report value
         tokensInput: 0, tokensOutput: 0, tokensCacheRead: 0, tokensCacheCreation: 0,
         complete: isComplete(row.ending_at, refreshedAt),
         extra: {
@@ -309,6 +432,7 @@ export default async function () {
         mergeExtra: (cur, inc) => { cur["cost.list_usd"] = round6((cur["cost.list_usd"] ?? 0) + (inc["cost.list_usd"] ?? 0)); },
       });
     }
+    await maybeFlush();
   }
 
   // --- usage rows ----------------------------------------------------------
@@ -337,17 +461,22 @@ export default async function () {
         mergeExtra: (cur, inc) => { cur["tools.web_search_requests"] = toLong(cur["tools.web_search_requests"]) + toLong(inc["tools.web_search_requests"]); },
       });
     }
+    await maybeFlush();
   }
 
   // --- emit ---------------------------------------------------------------
-  const events = [];
-  for (const f of acc.values()) {
-    events.push(await buildEvent({ ...f, orgId, extra: { ...f.extra, "data.refreshed_at": refreshedAt, "user.id": f.userId ?? null } }));
-  }
-  const sent = await ingestEvents(events, { businessEventsClient, batchSize: cfg.ingest_batch_size, log, dryRun: cfg.dry_run });
-  const summary = { source: SOURCE, events: events.length, ingested: cfg.dry_run ? 0 : sent, api_calls: client.calls, data_refreshed_at: refreshedAt, org_id: orgId, ...stats };
+  // Final flush sends the entries changed since the last early flush. If the deadline hit during cost paging, the
+  // usage loop above returned at once (paginate checks the deadline first) and client.partial explains why.
+  await flush();
+  const partial = client.partial;
+  const summary = {
+    source: SOURCE, events: acc.size, ingested: stats.ingested, api_calls: client.calls, data_refreshed_at: refreshedAt, org_id: orgId,
+    time_budget_ms: cfg.time_budget_ms, elapsed_ms: Date.now() - (deadline - cfg.time_budget_ms),
+    partial: Boolean(partial), ...(partial ? { reason: partial.reason } : {}),
+    ...stats,
+  };
   log(JSON.stringify(summary));
-  return cfg.dry_run ? { ...summary, sample: events.slice(0, 3) } : summary;
+  return cfg.dry_run ? { ...summary, sample } : summary;
 }
 
 // actor.email_address is null for deleted accounts / system service accounts: fall back to the user id

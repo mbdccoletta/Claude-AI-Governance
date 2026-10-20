@@ -25,7 +25,7 @@ NAME = "Claude Usage — Official Cost per Developer (layer 3)"
 BASE_30D = """fetch bizevents, from: now() - 45d
 | filter event.type == "claude.usage.daily"
 | filter coalesce(org.id, "") != "demo-sample"  // demo rows loaded from csv-import/sample.csv
-| filter usage.date >= formatTimestamp(now() - 30d, format: "yyyy-MM-dd")
+| filter usage.date >= formatTimestamp(now() - 30d, format: "yyyy-MM-dd", timezone: "UTC")
 | dedup dedup.key, sort: {timestamp desc}"""
 
 DEDUP_RULE = "| dedup dedup.key, sort: {timestamp desc}"
@@ -93,12 +93,12 @@ Q_OFFICIAL_VS_OBSERVED = dql_file("official-vs-observed-tokens.dql")
 Q_COVERAGE = """fetch bizevents, from: now() - 10d
 | filter event.type == "claude.usage.daily" and product == "claude_code"
 | filter coalesce(org.id, "") != "demo-sample"  // demo rows loaded from csv-import/sample.csv
-| filter usage.date >= formatTimestamp(now() - 7d, format: "yyyy-MM-dd")
+| filter usage.date >= formatTimestamp(now() - 7d, format: "yyyy-MM-dd", timezone: "UTC")
 | dedup dedup.key, sort: {timestamp desc}
 | summarize official_tokens = sum(tokens.total)
 | append [
     fetch logs, from: now() - 7d
-    | filter event.name == "api_request"
+    | filter event.name == "api_request" and in(service.name, {"claude-code", "claude-code-desktop"})
     | summarize observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens))
   ]
 | summarize official_tokens = sum(official_tokens), observed_tokens = sum(observed_tokens)
@@ -329,6 +329,12 @@ def check():
             errors.append(f"{tid}: unbalanced brackets")
         if re.search(r"\bfilter\s+timestamp\b", q):
             errors.append(f"{tid}: filters on ingest timestamp instead of usage.date")
+        if re.search(r'format: "yyyy-MM-dd"\)', q):
+            errors.append(f"{tid}: formatTimestamp(..., format: \"yyyy-MM-dd\") without timezone: \"UTC\"")
+        if "fetch logs" in q and 'product == "claude_code"' not in q:
+            errors.append(f"{tid}: coverage query compares logs (Claude Code only) with all products")
+        if "fetch logs" in q and 'in(service.name, {"claude-code", "claude-code-desktop"})' not in q:
+            errors.append(f"{tid}: coverage query does not filter the logs side by service.name")
         vs = t["visualizationSettings"]
         rf = vs.get("singleValue", {}).get("recordField")
         if rf and not re.search(rf"\b{re.escape(rf)}\b", q):
@@ -352,7 +358,7 @@ def main():
         if errors:
             print("CHECK FAILED:\n  " + "\n  ".join(errors))
             sys.exit(1)
-        print("CHECK OK: ids match, no overlaps, dedup rule + event.type filter in every data tile, json round-trips")
+        print("CHECK OK: ids match, no overlaps, dedup rule + event.type filter in every data tile, UTC formatTimestamp, coverage filters, json round-trips")
 
 
 if __name__ == "__main__":

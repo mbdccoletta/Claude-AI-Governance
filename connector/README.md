@@ -67,24 +67,39 @@ Import `workflow/claude-usage-connector.json` (Workflows app → Upload, or `dtc
 returned id and put it in the JSON as `id` for later updates; dtctl's `--write-id` does not write the file back)
 and set the workflow **inputs**:
 
-| Input | Meaning | Default |
-|---|---|---|
-| `org_type` | `enterprise` \| `console` \| `team` — gates which task runs | `enterprise` |
-| `credential_name` | vault entry name, used when `credential_id` is empty | `Anthropic <org_type> usage API key` |
-| `credential_id` | vault entry id (`CREDENTIALS_VAULT-…`) with the Anthropic key | — (optional when the entry is named as above; not needed for team) |
-| `org_id` | label copied to `org.id` | empty |
-| `anthropic_base_url` | Anthropic API base URL | `https://api.anthropic.com` |
-| `enterprise_lookback_days` | re-read window (revisions) | 10 |
-| `console_lookback_days` | days re-read for Console | 3 |
-| `console_include_api_usage` | also import org-level API usage as `product=api` | true |
-| `dry_run` | build events, log counts, ingest nothing | false |
-| `console_debug` | return the `usage_report/messages` bucket list the console task saw (no secrets) | false |
+| Input | Meaning | Default | Run params may override? |
+|---|---|---|---|
+| `org_type` | `enterprise` \| `console` \| `team` — gates which task runs. **Required**: the run fails fast when it is missing from the input | `enterprise` | no |
+| `credential_name` | vault entry name, used when `credential_id` is empty | `Anthropic <org_type> usage API key` | no |
+| `credential_id` | vault entry id (`CREDENTIALS_VAULT-…`) with the Anthropic key | — (optional when the entry is named as above; not needed for team) | no |
+| `org_id` | label copied to `org.id` | empty | no |
+| `anthropic_base_url` | Anthropic API base URL — must be `https://api.anthropic.com` (any other host, scheme or look-alike is rejected) | `https://api.anthropic.com` | no |
+| `allow_custom_base_url` | `true` lets `anthropic_base_url` point elsewhere. **Mocks only** (`test/run_tests.sh` uses it for the loopback server); never set it on a tenant — the key is sent to that URL | false | no |
+| `enterprise_lookback_days` | re-read window (revisions), clamped 1–31 | 10 | yes |
+| `console_lookback_days` | days re-read for Console, clamped 1–31 | 3 | yes |
+| `console_include_api_usage` | also import org-level API usage as `product=api` | true | yes |
+| `dry_run` | build events, log counts, ingest nothing | false | yes |
+| `console_debug` | return the `usage_report/messages` bucket list the console task saw (no secrets) | false | yes |
+| `ingest_batch_size` | events per ingest request, clamped 1–1000 (batches are also split at 4 MiB) | 500 | no |
+| `time_budget_ms` | paging stops after this many ms (2000–95000); lower it only in tests | 95000 | no |
+
+Run parameters (`dtctl exec workflow <id> --input '{…}'`, "Run with parameters") can only override the inputs marked **yes**;
+anything else in the params — in particular `org_type`, `credential_*`, `anthropic_base_url` — is ignored and logged by `resolve_config`.
+The workflow is imported **private** (`isPrivate: true`) and `deploy/vault_upsert.js` creates the vault entry with **Owner access only**.
+
+**Partial runs.** Every Anthropic call is serialized at ≥ 1.1 s, so a large org (users × days × product × model rows, 1000 per page)
+may not fit in one task. Each adapter stops paging at `time_budget_ms` (95 s of the 110 s task timeout) or after 200 pages per
+report, flushes what it accumulated to bizevents when < 15 s are left and once at the end, and returns `partial: true` with a `reason`
+in the task result (`dtctl logs workflow-execution …` shows the same line). Nothing is lost: the next scheduled run re-reads the whole
+lookback window and the DQL `dedup dedup.key, sort: {timestamp desc}` keeps the newest record. A `Retry-After` longer than 20 s is
+clamped to 20 s, and a back-off that would cross the deadline is not slept — the run ends partial instead. If `partial: true` shows up
+every day, shorten `enterprise_lookback_days` / `console_lookback_days` or split org types across workflows.
 
 Schedule: **daily 15:00 UTC** (Enterprise data for day D is normally complete by 13:00–13:30 UTC on D+1).
 The four tasks are `resolve_config` → (`enterprise_analytics` | `console_claude_code` | `team_reminder`), each gated by
 `result("resolve_config").org_type`. Each task stays within the 120 s runtime limit: ≥ 1.1 s between Anthropic calls
 (60 req/min org-wide budget, shared), backoff on 429/5xx honouring `Retry-After`, restart on 410 (expired cursor), ingest
-in batches of 500 events via `businessEventsClient.ingest`.
+in batches of `ingest_batch_size` events (500) and at most 4 MiB each via `businessEventsClient.ingest`.
 
 Scripted alternative: `deploy/deploy.sh --org-type console --org-id acme --run-now --yes` does steps 1–3 with dtctl plus a first run
 (see `skills/deploy-claude-usage-connector/SKILL.md`; the Anthropic key is read from the `ANTHROPIC_USAGE_KEY` env var and never written to disk).
@@ -115,7 +130,7 @@ See `dql/`:
 | `cost-per-developer-30d.dql` | cost, tokens, requests, active days per developer, last 30 days |
 | `tokens-by-product-model.dql` | token mix (input/output/cache) and cost per product × model |
 | `top10-developers-by-cost.dql` | top 10 developers with product split |
-| `official-vs-observed-tokens.dql` | layer 3 official daily tokens (deduped, demo rows dropped, **all products** — not filtered to `claude_code`) vs layer 2 real-time `event.name == "api_request"` logs (any `service.name`), per developer per day → coverage % and USD delta. On Enterprise orgs the coverage is therefore diluted by chat / Cowork / Design rows, and the log side's day is computed in the query timezone while `usage.date` is a UTC day; tightening the filters is a follow-up |
+| `official-vs-observed-tokens.dql` | layer 3 official daily tokens (deduped, demo rows dropped, `product == "claude_code"` only) vs layer 2 real-time `event.name == "api_request"` logs from `service.name` `claude-code` / `claude-code-desktop`, per developer per day → coverage % and USD delta. Both sides use UTC days (`formatTimestamp(…, timezone: "UTC")`, matching `usage.date`) |
 
 ## Dashboard
 

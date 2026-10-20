@@ -16,12 +16,17 @@ Behaviour under test: the FIRST request to each Anthropic path returns 429 with 
 a cursor presented with different query params returns 400 (exercises "never change params mid-cursor");
 a missing/invalid x-api-key returns 401.
 
+Time-budget knobs (env at start-up, or POST /_config {"pages": N, "slow": true}; POST /_reset restores the env values):
+  MOCK_PAGES=N   split every report into N small pages instead of 2 (large-org simulation)
+  MOCK_SLOW=1    the first request for the THIRD page (page index 2) of any report answers 429 with Retry-After: 20, once
+
 Usage: python3 mock_server.py [--port 8787]
 """
 import argparse
 import base64
 import hashlib
 import json
+import os
 import random
 import sys
 import threading
@@ -29,7 +34,8 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-STATE = {"events": [], "requests": [], "throttled": set(), "lock": threading.Lock()}
+ENV_CONFIG = {"pages": max(2, int(os.environ.get("MOCK_PAGES", "2") or 2)), "slow": os.environ.get("MOCK_SLOW", "") in ("1", "true", "yes")}
+STATE = {"events": [], "requests": [], "throttled": set(), "slow_done": False, "config": dict(ENV_CONFIG), "lock": threading.Lock()}
 USERS = ["alice@example.com", "bob@example.com", "carol@example.com", None]  # None = deleted/system account
 USER_IDS = {"alice@example.com": "user_01A", "bob@example.com": "user_01B", "carol@example.com": "user_01C", None: "user_01DELETED"}
 MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
@@ -80,12 +86,14 @@ def parse_cursor(path, params):
 
 
 def paginate(path, params, rows, page_size=None):
-    """Split rows into 2 pages (or by page_size) with cursors bound to the params."""
+    """Split rows into config["pages"] pages (default 2, or by page_size) with cursors bound to the params."""
     n, err = parse_cursor(path, params)
     if err:
         return None, err
     limit = int(params.get("limit", ["1000"])[0])
-    size = page_size or max(1, min(limit, (len(rows) + 1) // 2))  # force 2 pages when possible
+    with STATE["lock"]:
+        pages = STATE["config"]["pages"]
+    size = page_size or max(1, min(limit, -(-len(rows) // pages)))  # ceil(rows / pages): force `pages` pages when possible
     start = n * size
     chunk = rows[start:start + size]
     has_more = start + size < len(rows)
@@ -273,6 +281,14 @@ class Handler(BaseHTTPRequestHandler):
             if first:
                 self._record(path, 429)
                 return self._send(429, {"type": "error", "error": {"type": "rate_limit_error", "message": "simulated"}}, headers={"Retry-After": "1"})
+            page_no, _ = parse_cursor(path, params)
+            with STATE["lock"]:
+                slow_now = STATE["config"]["slow"] and not STATE["slow_done"] and page_no == 2
+                if slow_now:
+                    STATE["slow_done"] = True
+            if slow_now:
+                self._record(path, 429)
+                return self._send(429, {"type": "error", "error": {"type": "rate_limit_error", "message": "simulated slow Retry-After"}}, headers={"Retry-After": "20"})
             if path == "/v1/organizations/analytics/user_cost_report":
                 status, body = enterprise_report("cost", path, params)
             elif path == "/v1/organizations/analytics/user_usage_report":
@@ -296,7 +312,17 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/_reset":
             with STATE["lock"]:
                 STATE["events"].clear(); STATE["requests"].clear(); STATE["throttled"].clear()
+                STATE["slow_done"] = False; STATE["config"] = dict(ENV_CONFIG)
             return self._send(200, {"ok": True})
+        if path == "/_config":
+            cfg = json.loads(raw.decode() or "{}")
+            with STATE["lock"]:
+                if "pages" in cfg:
+                    STATE["config"]["pages"] = max(2, int(cfg["pages"]))
+                if "slow" in cfg:
+                    STATE["config"]["slow"] = bool(cfg["slow"])
+                STATE["slow_done"] = False
+                return self._send(200, {"ok": True, "config": STATE["config"]})
         if path == "/api/v2/bizevents/ingest" or path.startswith("/platform/ingest/custom/events/"):
             auth = self.headers.get("Authorization", "")
             if not (auth.startswith("Api-Token ") or auth.startswith("Bearer ")):

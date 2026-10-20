@@ -21,7 +21,7 @@ MARKER = "// @include common.js"
 TASK_ORDER = ["resolve_config", "enterprise_analytics", "console_claude_code", "team_reminder"]
 
 DESCRIPTIONS = {
-    "resolve_config": "Merge defaults, workflow input and run params into one config (org_type, credential_id, ...).",
+    "resolve_config": "Build the config from the workflow input (org_type, credential, base URL are input-only); run params may override lookback/dry_run/debug only.",
     "enterprise_analytics": "Claude Enterprise Analytics API: per-user cost + usage for the last 10 days -> claude.usage.daily bizevents.",
     "console_claude_code": "Claude Console Admin API: usage_report/claude_code (per user) + usage_report/messages (org-level api) -> bizevents.",
     "team_reminder": "Team plan: no API. Logs the reminder to run csv-import/import_team_spend.py.",
@@ -79,7 +79,7 @@ def build_workflow(scripts: dict) -> dict:
             "Enterprise: Analytics API key. Console: Admin API key. Team: CSV importer (this workflow only logs a reminder)."
         ),
         "type": "STANDARD",
-        "isPrivate": False,
+        "isPrivate": True,  # only the owner edits/runs it: inputs carry credential_name/base URL (deploy/render_workflow.py --public opts out)
         "schemaVersion": 3,
         "hourlyExecutionLimit": 10,
         "input": {
@@ -87,11 +87,13 @@ def build_workflow(scripts: dict) -> dict:
             "credential_id": "",
             "credential_name": "",
             "anthropic_base_url": "https://api.anthropic.com",
+            "allow_custom_base_url": False,
             "org_id": "",
             "enterprise_lookback_days": 10,
             "console_lookback_days": 3,
             "console_include_api_usage": True,
             "dry_run": False,
+            "console_debug": False,
         },
         "trigger": {
             "schedule": {

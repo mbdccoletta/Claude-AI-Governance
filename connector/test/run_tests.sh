@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # End-to-end local test: mock Anthropic + mock Dynatrace sink, Node adapters, CSV importer.
 # No tenant, no real key, no network beyond 127.0.0.1. Output is tee'd to test/test.log.
+#
+# The automation-utils shim reads the workflow INPUT from WF_INPUT and the run PARAMS from WF_PARAMS, mirroring
+# execution().input / execution().params. org_type, credential_*, anthropic_base_url come from WF_INPUT only (see
+# workflow/tasks/resolve_config.js); the mock base URL needs allow_custom_base_url=true, exactly as a tenant would.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
@@ -16,32 +20,148 @@ trap 'kill $MOCK_PID 2>/dev/null || true' EXIT
 for i in $(seq 1 30); do curl -sf "$DT_MOCK_URL/_stats" >/dev/null 2>&1 && break; sleep 0.2; done
 curl -sf -X POST "$DT_MOCK_URL/_reset" >/dev/null
 
+# workflow input for the mock: credential + base URL are input-only, allow_custom_base_url unlocks the loopback URL
+input_json() { # $1 = org_type, $2 = extra JSON fields (optional, without braces)
+  printf '{"org_type":"%s","credential_id":"%s","anthropic_base_url":"%s","allow_custom_base_url":true%s}' "$1" "${CRED_ID-CREDENTIALS_VAULT-MOCK}" "$DT_MOCK_URL" "${2:+,$2}"
+}
+# run the task chain, print its output, and keep the RESULT lines in $RESULTS for assertions
+run_chain() { RESULTS=$(node "$HERE/run_task.mjs" "$@" 2>&1 | tee /dev/stderr | grep '^RESULT ' || true); }
+result_of() { printf '%s\n' "$RESULTS" | sed -n "s/^RESULT $1 ([0-9]* ms): //p"; }
+assert_json() { # $1 = json, $2 = python expression over d, $3 = message
+  python3 -c 'import json,sys; d=json.loads(sys.argv[1]); ok=eval(sys.argv[2]); print(("ASSERT_OK  " if ok else "ASSERT_FAIL") + " " + sys.argv[3]); sys.exit(0 if ok else 1)' "$1" "$2" "$3"
+}
+
 {
   echo "=== dt-ai-observability-claude connector — local test run $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
   echo "node $(node --version), $(python3 --version), mock=$DT_MOCK_URL"
   echo
 
-  echo "--- [1/5] enterprise adapter (org_type=enterprise, 10-day window, cost+usage, 2 pages each, 429 on first call) ---"
-  WF_PARAMS='{"org_type":"enterprise","credential_id":"CREDENTIALS_VAULT-MOCK","anthropic_base_url":"'"$DT_MOCK_URL"'","enterprise_lookback_days":10}' \
-    node "$HERE/run_task.mjs" resolve_config enterprise_analytics console_claude_code team_reminder
+  echo "--- [1/9] enterprise adapter (org_type=enterprise, 10-day window, cost+usage, 2 pages each, 429 on first call) ---"
+  WF_INPUT="$(input_json enterprise '"enterprise_lookback_days":10')" run_chain resolve_config enterprise_analytics console_claude_code team_reminder
+  R=$(result_of enterprise_analytics)
+  assert_json "$R" 'd["partial"] is False and d["ingested"] == d["events"] and d["events"] > 0 and d["flushes"] == 1' "full run: partial=false, every accumulated entry ingested exactly once"
+  echo
+  echo "--- requests not doubled: sink enterprise_api events vs the mock's user_usage_report (cost rows carry requests too) ---"
+  curl -s "$DT_MOCK_URL/_sink" | python3 -c '
+import json, sys, urllib.request
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
+base = sys.argv[1]
+today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+params = [("starting_at", (today - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%S.000Z")), ("ending_at", today.strftime("%Y-%m-%dT%H:%M:%S.000Z")),
+          ("bucket_width", "1d"), ("group_by[]", "product"), ("group_by[]", "model"), ("limit", "1000"), ("exclude_deleted_users", "false")]
+PRODUCT = {"chat": "chat", "chat_cowork_unified": "chat", "claude_code": "claude_code", "cowork": "cowork", "claude_design": "design", "api": "api"}
+def fetch(page=None):
+    q = params + ([("page", page)] if page else [])
+    req = urllib.request.Request(f"{base}/v1/organizations/analytics/user_usage_report?{urlencode(q)}", headers={"x-api-key": "sk-ant-mock", "anthropic-version": "2023-06-01"})
+    return json.load(urllib.request.urlopen(req))
+expected, page, pages = {}, None, 0
+while True:
+    body = fetch(page); pages += 1
+    for r in body["data"]:
+        a = r["actor"]; k = (a.get("email_address") or "user:" + a["user_id"], PRODUCT.get(r["product"], "other"), r["model"], r["starting_at"][:10])
+        expected[k] = expected.get(k, 0) + r["requests"]
+    if not body.get("has_more"): break
+    page = body["next_page"]
+ev = [e for e in json.load(sys.stdin) if e["source"] == "enterprise_api"]
+bad, matched, cost_only = [], 0, 0
+for e in ev:
+    k = (e["user.email"] or "user:" + str(e.get("user.id")), e["product"], e["model"], e["usage.date"])
+    exp = expected.get(k)
+    if exp is None:
+        cost_only += 1
+        if e["requests"] is not None: bad.append((k, e["requests"], None))
+    else:
+        matched += 1
+        if e["requests"] != exp: bad.append((k, e["requests"], exp))
+print(f"usage rows: {sum(1 for _ in expected)} keys over {pages} pages; sink events: {len(ev)} (matched {matched}, cost-only {cost_only} with requests=null); mismatches: {len(bad)}")
+for b in bad[:5]: print("  MISMATCH", b)
+print("REQUESTS_OK" if not bad and matched else "REQUESTS_FAIL"); sys.exit(1 if bad or not matched else 0)' "$DT_MOCK_URL"
   echo
 
-  echo "--- [2/5] console adapter (org_type=console, credential looked up by NAME, 3 days claude_code + messages by model+workspace) ---"
-  WF_PARAMS='{"org_type":"console","credential_id":"","anthropic_base_url":"'"$DT_MOCK_URL"'","console_lookback_days":3}' \
-    node "$HERE/run_task.mjs" resolve_config enterprise_analytics console_claude_code team_reminder
+  echo "--- [2/9] console adapter (org_type=console, credential looked up by NAME, 3 days claude_code + messages by model+workspace) ---"
+  CRED_ID="" WF_INPUT="$(input_json console '"console_lookback_days":3')" run_chain resolve_config enterprise_analytics console_claude_code team_reminder
+  R=$(result_of console_claude_code)
+  assert_json "$R" 'd["partial"] is False and d["ingested"] == d["events"] and d["events"] > 0' "full run: partial=false, every accumulated entry ingested"
   echo
 
-  echo "--- [3/5] team no-op task (org_type=team) ---"
-  WF_PARAMS='{"org_type":"team","credential_id":""}' \
-    node "$HERE/run_task.mjs" resolve_config enterprise_analytics console_claude_code team_reminder
+  echo "--- [3/9] team no-op task (org_type=team) ---"
+  WF_INPUT='{"org_type":"team","credential_id":""}' run_chain resolve_config enterprise_analytics console_claude_code team_reminder
   echo
 
-  echo "--- [4/5] CSV importer --dry-run (first 2 events shown) ---"
+  echo "--- [4/9] resolve_config guards: params cannot override credential/base URL; org_type must come from input; base URL pinned ---"
+  WF_INPUT='{"org_type":"team"}' WF_PARAMS='{"anthropic_base_url":"http://127.0.0.1:1/evil","credential_id":"CREDENTIALS_VAULT-ATTACKER","credential_name":"other","org_type":"enterprise","dry_run":true,"console_lookback_days":99}' \
+    run_chain resolve_config
+  R=$(result_of resolve_config)
+  assert_json "$R" 'd["anthropic_base_url"] == "https://api.anthropic.com" and d["credential_id"] == "" and d["credential_name"] == "Anthropic team usage API key" and d["org_type"] == "team" and d["dry_run"] is True and d["console_lookback_days"] == 31 and d["ingest_batch_size"] == 500' \
+    "params ignored for base URL/credential/org_type; dry_run and lookback (clamped to 31) honoured"
+  if WF_INPUT='{}' WF_PARAMS='{"org_type":"enterprise"}' node "$HERE/run_task.mjs" resolve_config >"$HERE/.guard.out" 2>&1; then echo "ASSERT_FAIL missing org_type in input was accepted"; exit 1; fi
+  grep -q "workflow input org_type is missing" "$HERE/.guard.out" || { echo "ASSERT_FAIL unexpected error for missing org_type:"; cat "$HERE/.guard.out"; exit 1; }
+  echo "ASSERT_OK   missing org_type in input fails fast ($(grep -o 'org_type is missing[^.]*' "$HERE/.guard.out" | head -1))"
+  if WF_INPUT="{\"org_type\":\"enterprise\",\"anthropic_base_url\":\"$DT_MOCK_URL\"}" node "$HERE/run_task.mjs" resolve_config >"$HERE/.guard.out" 2>&1; then echo "ASSERT_FAIL custom base URL accepted without allow_custom_base_url"; exit 1; fi
+  grep -q "anthropic_base_url must start with https://api.anthropic.com" "$HERE/.guard.out" || { echo "ASSERT_FAIL unexpected error for custom base URL:"; cat "$HERE/.guard.out"; exit 1; }
+  echo "ASSERT_OK   custom base URL rejected without allow_custom_base_url"
+  if WF_INPUT='{"org_type":"enterprise","anthropic_base_url":"https://api.anthropic.com.evil.example/"}' node "$HERE/run_task.mjs" resolve_config >"$HERE/.guard.out" 2>&1; then echo "ASSERT_FAIL look-alike host accepted"; exit 1; fi
+  echo "ASSERT_OK   look-alike host https://api.anthropic.com.evil.example rejected"
+  WF_INPUT='{"org_type":"team","ingest_batch_size":99999,"time_budget_ms":1}' run_chain resolve_config
+  assert_json "$(result_of resolve_config)" 'd["ingest_batch_size"] == 1000 and d["time_budget_ms"] == 2000' "ingest_batch_size clamped to 1000, time_budget_ms clamped to the 2 s floor"
+  rm -f "$HERE/.guard.out"
+  echo
+
+  echo "--- [5/9] time budget, enterprise: 40 small pages per report, one Retry-After: 20 on the 3rd page, time_budget_ms=12000 ---"
+  curl -sf -X POST "$DT_MOCK_URL/_reset" >/dev/null
+  curl -sf -X POST "$DT_MOCK_URL/_config" -d '{"pages":40,"slow":true}' >/dev/null
+  WF_INPUT="$(input_json enterprise '"time_budget_ms":12000')" run_chain resolve_config enterprise_analytics
+  R=$(result_of enterprise_analytics)
+  assert_json "$R" 'd["partial"] is True and "reason" in d and d["ingested"] > 0 and d["flushes"] >= 1 and d["cost_pages"] == 2 and d["usage_pages"] >= 1 and d["elapsed_ms"] < 12000 + 4000' \
+    "partial=true with a reason, events ingested before the deadline, 20 s Retry-After not slept (cost stopped at 2 pages), usage still paged"
+  SINK=$(curl -s "$DT_MOCK_URL/_stats")
+  assert_json "$SINK" 'd["by_source"].get("enterprise_api", 0) > 0' "sink holds enterprise_api events from the partial run"
+  echo
+
+  echo "--- [6/9] time budget, console: 1-row pages, time_budget_ms=8000 -> stops between day chains, partial with events ---"
+  curl -sf -X POST "$DT_MOCK_URL/_reset" >/dev/null
+  curl -sf -X POST "$DT_MOCK_URL/_config" -d '{"pages":40,"slow":false}' >/dev/null
+  CRED_ID="" WF_INPUT="$(input_json console '"console_lookback_days":3,"time_budget_ms":8000')" run_chain resolve_config console_claude_code
+  R=$(result_of console_claude_code)
+  assert_json "$R" 'd["partial"] is True and d["ingested"] > 0 and d["claude_code_pages"] >= 3 and d["elapsed_ms"] < 8000 + 4000' "partial=true, events ingested, finished shortly after the 8 s budget"
+  curl -sf -X POST "$DT_MOCK_URL/_reset" >/dev/null
+  echo
+
+  echo "--- [7/9] accumulator unit checks: requests from usage rows only; ingest batches split by count and by bytes ---"
+  node --input-type=module -e '
+    const src = (await import("node:fs")).readFileSync(process.argv[1], "utf8");
+    const m = await import("data:text/javascript," + encodeURIComponent(src + "\nexport { makeAccumulator, ingestEvents, flushReserveMs };"));
+    const acc = m.makeAccumulator();
+    const base = { email: "a@x", product: "claude_code", model: "m", date: "2026-10-01", source: "enterprise_api" };
+    acc.add({ ...base, costUsd: 1.5, requests: null, tokensInput: 0 });   // cost row (the API also returns requests here; the task passes null)
+    acc.add({ ...base, costUsd: null, requests: 10, tokensInput: 100 });   // usage row
+    acc.add({ ...base, costUsd: null, requests: 5, tokensInput: 50 });     // second usage row, same key
+    const v = acc.values()[0];
+    const ok1 = v.requests === 15 && v.tokensInput === 150 && v.costUsd === 1.5 && acc.size === 1;
+    console.log((ok1 ? "ASSERT_OK  " : "ASSERT_FAIL") + ` accumulator: requests=${v.requests} (expected 15, not 30), tokensInput=${v.tokensInput}, costUsd=${v.costUsd}`);
+    const d1 = acc.takeDirty().length, d2 = acc.takeDirty().length; acc.add({ ...base, requests: 1 }); const d3 = acc.takeDirty().length;
+    console.log(((d1 === 1 && d2 === 0 && d3 === 1) ? "ASSERT_OK  " : "ASSERT_FAIL") + ` dirty tracking: ${d1},${d2},${d3} (expected 1,0,1)`);
+    const sizes = []; const client = { ingest: async ({ body }) => { sizes.push(body.length); } };
+    const big = Array.from({ length: 1200 }, (_, i) => ({ "event.type": "t", i, pad: "x".repeat(10_000) }));
+    const sent = await m.ingestEvents(big, { businessEventsClient: client, batchSize: 500, maxBatchBytes: 1024 * 1024, log: () => {} });
+    const ok3 = sent === 1200 && sizes.every((n) => n <= 104) && sizes.length >= 12;
+    console.log((ok3 ? "ASSERT_OK  " : "ASSERT_FAIL") + ` ingest split by bytes: ${sizes.length} batches of <= ${Math.max(...sizes)} events for 1200 x 10 KB with a 1 MiB cap (sent ${sent})`);
+    const small = Array.from({ length: 1001 }, (_, i) => ({ "event.type": "t", i })); sizes.length = 0;
+    await m.ingestEvents(small, { businessEventsClient: client, batchSize: 500, log: () => {} });
+    console.log(((sizes.join(",") === "500,500,1") ? "ASSERT_OK  " : "ASSERT_FAIL") + ` ingest split by count: ${sizes.join(",")} (expected 500,500,1)`);
+    console.log(((m.flushReserveMs(95000) === 15000 && m.flushReserveMs(12000) === 3000 && m.flushReserveMs(2000) === 1000) ? "ASSERT_OK  " : "ASSERT_FAIL") + " flush reserve: 15 s at 95 s, 3 s at 12 s, 1 s floor");
+    if (!(ok1 && ok3 && d1 === 1 && d2 === 0 && d3 === 1)) process.exit(1);' "$ROOT/workflow/lib/common.js"
+  echo
+
+  echo "--- [8/9] CSV importer --dry-run (first 2 events shown) ---"
   python3 "$ROOT/csv-import/import_team_spend.py" --csv "$ROOT/csv-import/sample.csv" --date 2026-10-18 --org-id org_team_demo --dry-run \
     | python3 -c 'import json,sys; ev=json.load(sys.stdin); print(json.dumps(ev[:2], indent=2)); print(f"... {len(ev)} events total")'
   echo
 
-  echo "--- [5/5] CSV importer -> mock sink ---"
+  echo "--- [9/9] CSV importer -> mock sink (after the enterprise + console full runs are replayed into the sink) ---"
+  WF_INPUT="$(input_json enterprise)" node "$HERE/run_task.mjs" resolve_config enterprise_analytics >/dev/null
+  CRED_ID="" WF_INPUT="$(input_json console)" node "$HERE/run_task.mjs" resolve_config console_claude_code >/dev/null
   DT_INGEST_TOKEN=dt0c01.MOCK.TOKEN python3 "$ROOT/csv-import/import_team_spend.py" \
     --csv "$ROOT/csv-import/sample.csv" --date 2026-10-18 --org-id org_team_demo --tenant "$DT_MOCK_URL"
   echo
@@ -88,5 +208,9 @@ api=[e for e in ev if e["product"]=="api"]; ak=[e for e in ev if str(e["user.ema
 print(f"api rows (user.email null, api.workspace_id set): {len(api)}; api_actor rows (user.email apikey:*): {len(ak)}")
 print("SCHEMA_OK" if not (bad or badtype or badkey or baddate or badprod or dups) else "SCHEMA_FAIL"); sys.exit(1 if (bad or badtype or badkey or baddate or badprod or dups) else 0)'
   echo
+
+  echo "--- dashboard builder structural checks (dedup rule, UTC formatTimestamp, coverage filters) ---"
+  python3 "$ROOT/dashboard/build.py" --check
+  echo
   echo "=== ALL TESTS PASSED ==="
-} 2>&1 | tee "$LOG"
+} 2>&1 | sed "s#$ROOT#connector#g" | tee "$LOG"   # no local absolute paths in the committed log

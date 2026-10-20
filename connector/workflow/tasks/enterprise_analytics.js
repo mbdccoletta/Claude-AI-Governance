@@ -5,6 +5,9 @@
 // Both called with bucket_width=1d, group_by[]=product,model, limit=1000, for the last N complete UTC days
 // (default 10: Anthropic revises cost values until ~7 days after month end, so we re-read and let
 // DQL dedup keep the newest record per dedup.key).
+// Time budget: paging stops at cfg.time_budget_ms (default 95 s of the 110 s task timeout); the accumulator is flushed
+// to bizevents when less than the reserve is left and once at the end, so a big org still ingests something every run
+// and the summary says { partial: true, reason } when the window was not fully read (next run re-reads it anyway).
 import { result } from "@dynatrace-sdk/automation-utils";
 import { credentialVaultClient, businessEventsClient } from "@dynatrace-sdk/client-classic-environment-v2";
 
@@ -20,7 +23,9 @@ export default async function () {
 
   const log = (m) => console.log(`[enterprise] ${m}`);
   const apiKey = await resolveApiKey(credentialVaultClient, cfg.credential_id, cfg.credential_name);
-  const client = makeAnthropicClient({ baseUrl: cfg.anthropic_base_url, apiKey, log });
+  const deadline = Date.now() + cfg.time_budget_ms;
+  const reserveMs = flushReserveMs(cfg.time_budget_ms);
+  const client = makeAnthropicClient({ baseUrl: cfg.anthropic_base_url, apiKey, log, deadline });
 
   const now = new Date();
   const startingAt = daysAgo(cfg.enterprise_lookback_days, now).toISOString();
@@ -38,7 +43,14 @@ export default async function () {
   const acc = makeAccumulator();
   let refreshedAt = null;
   let orgId = cfg.org_id ?? null;
-  const stats = { cost_rows: 0, usage_rows: 0, cost_pages: 0, usage_pages: 0 };
+  const stats = { cost_rows: 0, usage_rows: 0, cost_pages: 0, usage_pages: 0, flushes: 0, ingested: 0, events_built: 0 };
+  const sample = [];
+  const flush = () => flushAccumulator(acc, {
+    build: (f) => ({ ...f, orgId, extra: { ...f.extra, "data.refreshed_at": refreshedAt, "user.id": f.userId ?? null } }),
+    businessEventsClient, batchSize: cfg.ingest_batch_size, log, dryRun: cfg.dry_run, stats, sampleOut: sample,
+  });
+  // flush early once the budget is nearly spent, so the final flush has little left to send
+  const maybeFlush = async () => { if (client.remainingMs() < reserveMs && acc.dirtySize) { log(`budget low (${client.remainingMs()} ms left): flushing ${acc.dirtySize} entries`); await flush(); } };
 
   // --- cost rows -----------------------------------------------------------
   for await (const page of client.paginate(COST_PATH, params)) {
@@ -55,7 +67,7 @@ export default async function () {
         date: day,
         source: SOURCE,
         costUsd: centsToUsd(row.amount),
-        requests: row.requests ?? null,
+        requests: null, // the cost report may also carry `requests`; counting it here would double the usage-report value
         tokensInput: 0, tokensOutput: 0, tokensCacheRead: 0, tokensCacheCreation: 0,
         complete: isComplete(row.ending_at, refreshedAt),
         extra: {
@@ -65,6 +77,7 @@ export default async function () {
         mergeExtra: (cur, inc) => { cur["cost.list_usd"] = round6((cur["cost.list_usd"] ?? 0) + (inc["cost.list_usd"] ?? 0)); },
       });
     }
+    await maybeFlush();
   }
 
   // --- usage rows ----------------------------------------------------------
@@ -93,17 +106,22 @@ export default async function () {
         mergeExtra: (cur, inc) => { cur["tools.web_search_requests"] = toLong(cur["tools.web_search_requests"]) + toLong(inc["tools.web_search_requests"]); },
       });
     }
+    await maybeFlush();
   }
 
   // --- emit ---------------------------------------------------------------
-  const events = [];
-  for (const f of acc.values()) {
-    events.push(await buildEvent({ ...f, orgId, extra: { ...f.extra, "data.refreshed_at": refreshedAt, "user.id": f.userId ?? null } }));
-  }
-  const sent = await ingestEvents(events, { businessEventsClient, batchSize: cfg.ingest_batch_size, log, dryRun: cfg.dry_run });
-  const summary = { source: SOURCE, events: events.length, ingested: cfg.dry_run ? 0 : sent, api_calls: client.calls, data_refreshed_at: refreshedAt, org_id: orgId, ...stats };
+  // Final flush sends the entries changed since the last early flush. If the deadline hit during cost paging, the
+  // usage loop above returned at once (paginate checks the deadline first) and client.partial explains why.
+  await flush();
+  const partial = client.partial;
+  const summary = {
+    source: SOURCE, events: acc.size, ingested: stats.ingested, api_calls: client.calls, data_refreshed_at: refreshedAt, org_id: orgId,
+    time_budget_ms: cfg.time_budget_ms, elapsed_ms: Date.now() - (deadline - cfg.time_budget_ms),
+    partial: Boolean(partial), ...(partial ? { reason: partial.reason } : {}),
+    ...stats,
+  };
   log(JSON.stringify(summary));
-  return cfg.dry_run ? { ...summary, sample: events.slice(0, 3) } : summary;
+  return cfg.dry_run ? { ...summary, sample } : summary;
 }
 
 // actor.email_address is null for deleted accounts / system service accounts: fall back to the user id

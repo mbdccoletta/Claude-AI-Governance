@@ -10,7 +10,7 @@ adapters) and by `csv-import/import_team_spend.py` (Team). Stored in Grail as `f
 | `event.type` | string | always `claude.usage.daily` |
 | `event.provider` | string | `dt-ai-observability-claude` |
 | `schema.version` | string | `1.0` |
-| `user.email` | string \| null | Developer e-mail. Console API-key actors: `apikey:<api_key_name>`. Console org-level API rows (`product=api`): `null`. Enterprise deleted/system accounts: `null` (see `user.id`). |
+| `user.email` | string \| null | Developer e-mail. Console API-key actors: `apikey:<api_key_name>`. Console org-level API rows (`product=api`): `null`. Enterprise deleted/system accounts and Console user actors without an e-mail: `null` (see `user.id`). |
 | `product` | string | normalised enum `chat` \| `claude_code` \| `cowork` \| `design` \| `api` \| `other` (mapping below) |
 | `model` | string | Anthropic model id, e.g. `claude-opus-5-5`; `unknown` when the source does not break down by model |
 | `tokens.input` | long | uncached input tokens |
@@ -28,7 +28,8 @@ adapters) and by `csv-import/import_team_spend.py` (Team). Stored in Grail as `f
 | `dedup.key` | string | idempotency key: first 32 hex chars of `SHA-256("email|product|model|date|source")` |
 
 `dedup.key` details: `email` is `user.email`, or a stable fallback when it is null (`user:<user_id>` for Enterprise deleted
-accounts, `workspace:<workspace_id or default>` for Console `api` rows, `unknown` for Team rows without e-mail). The
+accounts and Console user actors, `unknown-user` when no user id exists either, `workspace:<workspace_id or default>` for Console `api` rows,
+`unknown` for Team rows without e-mail). The
 implementation is identical in `workflow/lib/common.js` and `csv-import/import_team_spend.py` (parity is asserted by the test).
 
 ## Optional fields (per source)
@@ -36,7 +37,7 @@ implementation is identical in `workflow/lib/common.js` and `csv-import/import_t
 | Field | Source | Meaning |
 |---|---|---|
 | `product.raw` | all | Anthropic's product value before normalisation (`chat_cowork_unified`, `claude_design`, …) |
-| `user.id` | enterprise, team | Anthropic `actor.user_id` / Team `account UUID` |
+| `user.id` | enterprise, console, team | Anthropic `actor.user_id` / Team `account UUID` (Console: only when the API returns a `user_id`) |
 | `cost.list_usd`, `cost.currency` | enterprise | pre-discount list price |
 | `cost.gross_usd`, `model.family` | team | gross spend and model family from the CSV |
 | `data.refreshed_at` | enterprise | `data_refreshed_at` watermark of the API response |

@@ -277,7 +277,7 @@ Detalhes: o `service.name` nativo é definido pelo Claude Code (`claude-code-des
 |---|---|
 | Org no claude.ai (Team ou Enterprise) | **Monitoramento** do Cowork direto para o Dynatrace ([Telemetria do Cowork](#telemetria-do-cowork)); **Chat e Cowork unificados** ligado (Recursos → Chat) |
 | Máquina de cada dev | este asset com OTel nativo (`./install.sh --enable-native-otel`). Quem usa VS Code / Cursor instala **ou** a extensão do VS Code **ou** este asset, nunca os dois |
-| Dynatrace | os dois dashboards; camada 3 com o importador do CSV (Team) ou o workflow da Analytics API (Enterprise por uso) |
+| Dynatrace | os dois dashboards; no Enterprise por uso, o workflow da Analytics API da camada 3. No **Team**, o CSV de gastos é **opcional, só para conciliação mensal da fatura**: é manual (exportado pelo Owner), atualiza com 1 dia de atraso, traz só o excedente e uma org nova não mostra nada até o dia seguinte — não serve como fonte de monitoramento |
 
 **Uma fonte da verdade por pergunta**
 

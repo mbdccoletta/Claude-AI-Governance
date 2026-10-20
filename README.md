@@ -296,7 +296,7 @@ Notes:
 |---|---|
 | claude.ai org (Team or Enterprise) | Cowork **Monitoring** pointed straight at Dynatrace ([Cowork telemetry](#cowork-telemetry)); **Chat and Cowork unified** on (Capabilities → Chat) |
 | Each developer machine | this asset with native OTel (`./install.sh --enable-native-otel`). VS Code / Cursor users install **either** the VS Code extension **or** this asset, never both |
-| Dynatrace | both dashboards; layer 3 with the Team CSV importer (Team) or the Analytics API workflow (Enterprise usage-based) |
+| Dynatrace | both dashboards; on Enterprise usage-based, the layer 3 Analytics API workflow. On **Team**, the spend CSV is **optional, for monthly billing reconciliation only**: it is manual (Owner export), refreshed with a 1-day lag, lists only overage, and a new org shows nothing until the next day — it is not a monitoring source |
 
 **One source of truth per question**
 

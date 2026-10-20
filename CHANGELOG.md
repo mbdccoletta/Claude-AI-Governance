@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- docs: **Cowork OTel export validated** on a Claude Team org (2026-10-20): logs only, `service.name = cowork`, `cowork.surface`, same event schema as Claude Code; base endpoint without `/v1/logs`; `Authorization=Api-Token …` header form; prompts redacted by default; *Chat and Cowork unified* (beta toggle on Team) routes plain chats through the same export. README, GUIDE and `docs/cowork-validation.md` updated (exact settings path, doubled-`dt0c01.` pitfall, troubleshooting).
 - docs: `docs/cowork-validation.md` — step-by-step runbook (pt-BR) to validate the Cowork OTel export in a customer's Team/Enterprise org (prerequisites, token, claude.ai setup, traffic, four DQL steps in `docs/dql/`, troubleshooting, results form, ready-to-send message for the customer admin).
 - docs: coverage corrected after re-checking Anthropic's docs on 2026-10-20 — Cowork **is** observable in real time through its admin-configured OpenTelemetry export (Team and Enterprise; new "Cowork telemetry" section, not yet validated on a tenant), and the Team spend CSV only holds **overage** beyond the seat allotment (Owner-only export), so it is a partial view of chat, not total consumption. Matrix, quick answers, plans table, credentials and who-does-what updated in README, GUIDE and connector/README.
 - docs: Uninstall section (README and GUIDE) now lists exactly what is removed per OS, when to use `--keep-hooks` / `--keep-binary`, how to verify the machine is clean, and how it coexists with the VS Code extension.

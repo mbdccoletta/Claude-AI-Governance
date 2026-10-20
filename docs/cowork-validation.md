@@ -6,6 +6,8 @@ Leva cerca de 30 minutos: 10 do admin do claude.ai, 5 do admin Dynatrace, o rest
 
 > Não funciona com assinatura pessoal (Free, Pro, Max): essas contas não têm organização nem a área *Organization settings*. É por isso que a validação precisa ser feita na org do cliente.
 
+**Validado em 2026-10-20** numa org Team: eventos com `service.name = cowork`, `cowork.surface = remote`, `api_request` com tokens, custo, modelo e `user.email`; prompts chegam como `<REDACTED>`; só logs, sem spans nem métricas.
+
 Fonte: [Monitor Claude Cowork activity with OpenTelemetry](https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry) (Anthropic).
 
 ## 1. O que pedir ao cliente antes
@@ -29,18 +31,18 @@ Se o tenant restringe leitura de logs por grupo IAM, confira que o grupo de quem
 ## 3. claude.ai: ligar a exportação (admin da org, 10 min)
 
 1. Clique nas iniciais no canto inferior esquerdo → **Organization settings**.
-2. Seção **Cowork** → **Monitoring** (OpenTelemetry).
+2. **Data and privacy** → aba **Monitoring** → bloco *Cowork, Cowork in the cloud, and unified chat and Cowork* (link direto: `claude.ai/admin-settings/data-privacy-controls#cowork-monitoring`).
 3. Preencha:
 
 | Campo | Valor |
 |---|---|
-| OTLP endpoint | `https://<env>.live.dynatrace.com/api/v2/otlp/v1/logs` (`.live.`, nunca `.apps.`) |
+| OTLP endpoint | `https://<env>.live.dynatrace.com/api/v2/otlp` (URL base, **sem** `/v1/logs`; `.live.`, nunca `.apps.`) |
 | OTLP protocol | **HTTP/protobuf** (o Dynatrace rejeita HTTP/JSON) |
 | OTLP headers | nome `Authorization`, valor `Api-Token dt0c01...` |
 
 4. Salve.
 
-Se o formulário disser que acrescenta `/v1/logs` sozinho, informe só `https://<env>.live.dynatrace.com/api/v2/otlp`. Não habilite captura de conteúdo para a validação: tokens, modelo, custo e e-mail já vêm por padrão. Para garantir que nenhum build antigo do Desktop envie conteúdo, o admin pode definir a device policy `otlpContentCapture` como `[]`.
+O exportador acrescenta `/v1/logs` sozinho (validado em 2026-10-20). No campo de header, cole o token logo depois de `Api-Token ` e confira que ele começa com **um único** `dt0c01.`: prefixo duplicado dá 401 e nada chega, sem erro visível no console. Não habilite captura de conteúdo para a validação: tokens, modelo, custo e e-mail já vêm por padrão. Para garantir que nenhum build antigo do Desktop envie conteúdo, o admin pode definir a device policy `otlpContentCapture` como `[]`.
 
 Alternativa quando o cliente não quer o token no console da Anthropic ou precisa de redação: apontar para um OpenTelemetry Collector com endpoint HTTPS público, que a nuvem da Anthropic e os desktops alcancem, e dele para o Dynatrace. O collector local em `127.0.0.1:4318` deste asset não serve para isso.
 
@@ -67,7 +69,9 @@ Se o passo 1 mostra eventos mas o passo 3 vem vazio, o Cowork nomeia os campos d
 
 | Sintoma | Causa provável | Ação |
 |---|---|---|
-| Nada chega, passo 4 mostra `rejected > 0` | protocolo HTTP/JSON, ou endpoint sem `/v1/logs` | trocar para HTTP/protobuf; conferir o caminho |
+| Nada chega | prefixo `dt0c01.` duplicado no header (o caso mais comum: digitar `dt0c01.` e colar o token que já começa com ele) | redigitar o header: `Authorization=Api-Token ` + token colado |
+| Nada chega, passo 4 mostra `rejected > 0` | protocolo HTTP/JSON, ou endpoint com `/v1/logs` duplicado | trocar para HTTP/protobuf; usar a URL base |
+| Usuário mandou só chat | sem o *Chat and Cowork unified* ligado, o chat não exporta | ligar o toggle em Organization settings → Chat, ou testar com uma tarefa Cowork |
 | Nada chega, `received = 0` | token sem `logs.ingest`, host `.apps.`, ou Desktop abaixo da versão mínima | regerar token; usar `.live.`; atualizar o Desktop |
 | Eventos chegam, `fetch logs` vazio para quem consulta | grupo IAM sem leitura do bucket `default_logs` | política IAM de leitura no bucket |
 | Só o usuário do Desktop aparece | versão do Desktop abaixo de 1.22209.3 para sessões na nuvem, ou a sessão web ainda não terminou | atualizar; esperar e repetir |
@@ -92,4 +96,4 @@ Com isso o asset recebe: a seção de Cowork da doc sem o aviso de "não validad
 
 ## Mensagem pronta para o admin do cliente
 
-> Olá! Para o teste de observabilidade do Cowork no Dynatrace preciso de 10 minutos de alguém com papel de Owner ou admin da org no claude.ai. Caminho: iniciais no canto inferior esquerdo → Organization settings → Cowork → Monitoring. Preencher: endpoint `https://<env>.live.dynatrace.com/api/v2/otlp/v1/logs`, protocolo HTTP/protobuf, header `Authorization` com valor `Api-Token <token que eu envio por canal seguro>`. Não precisa ligar captura de conteúdo. Depois disso, dois usuários rodam uma tarefa curta no Cowork (um no Desktop, um no claude.ai web) e eu confiro no Dynatrace. Nada é instalado nas máquinas.
+> Olá! Para o teste de observabilidade do Cowork no Dynatrace preciso de 10 minutos de alguém com papel de Owner ou admin da org no claude.ai. Caminho: iniciais no canto inferior esquerdo → Organization settings → Cowork → Monitoring. Preencher: endpoint `https://<env>.live.dynatrace.com/api/v2/otlp` (sem `/v1/logs`), protocolo HTTP/protobuf, header `Authorization=Api-Token <token que eu envio por canal seguro>` (um único `dt0c01.` no início do token). Não precisa ligar captura de conteúdo. Depois disso, dois usuários rodam uma tarefa curta no Cowork (um no Desktop, um no claude.ai web) e eu confiro no Dynatrace. Nada é instalado nas máquinas.

@@ -25,8 +25,8 @@ Diagramas: [visão geral](docs/overview.svg) · [coleta de dados](connector/docs
 | **`claude` CLI no terminal** | ✅ idem (`service.name = claude-code`) | ✅ como `claude_code` |
 | **VS Code / Cursor** | ✅ mesmo hook (este instalador ou o asset VS Code) | ✅ como `claude_code` |
 | **Claude Code na web** (nuvem da Anthropic) | ⚠️ só métricas/logs nativos, se o ambiente cloud tiver as variáveis `OTEL_*` (endpoint = `https://<tenant>.live.dynatrace.com/api/v2/otlp`, token em `OTEL_EXPORTER_OTLP_HEADERS`, `http/protobuf`; sem coletor local, logo sem redação nem `user.email`) | ✅ como `claude_code` (remoto) |
-| **Cowork** (sessões locais do Desktop e sessões na nuvem a partir do desktop, web ou mobile) | ✅ exportação OTel configurada pelo admin, Team e Enterprise: eventos `api_request` com modelo, tokens, custo estimado e e-mail do usuário, mesmo esquema da camada 2; sem hooks, logo sem spans `gen_ai` nem detalhe de tool call. Ver [Telemetria do Cowork](#telemetria-do-cowork) | ✅ como `cowork` (Enterprise por uso); CSV do Team: **só excedente** |
-| **claude.ai chat, Design** (web e chat do Desktop) | ❌ sem hooks, sem OTel. O modo *Chat and Cowork unified* (beta no Enterprise, chegando a Pro/Max, sem data para Team) transforma as conversas em sessões Cowork e as traz para a exportação OTel do Cowork | ✅ como `chat` / `design` (Enterprise por uso). Team e Enterprise por assento: CSV de gastos com **só o excedente** (gasto acima da cota do assento; vazio se o uso extra estiver desligado), ou seja, visão parcial, não o consumo total |
+| **Cowork** (sessões locais do Desktop e sessões na nuvem a partir do desktop, web ou mobile) | ✅ exportação OTel configurada pelo admin, Team e Enterprise (**validado em 2026-10-20**): logs com `service.name = cowork`, `api_request` com modelo, tokens, custo e e-mail do usuário, mesmo esquema da camada 2; sem hooks, logo sem spans `gen_ai`. Ver [Telemetria do Cowork](#telemetria-do-cowork) | ✅ como `cowork` (Enterprise por uso); CSV do Team: **só excedente** |
+| **claude.ai chat, Design** (web e chat do Desktop) | ❌ sem hooks, sem OTel. ✅ com o *Chat and Cowork unified* ligado (toggle beta no Team e no Enterprise): as conversas rodam como sessões Cowork e chegam pela exportação OTel do Cowork (**validado no Team em 2026-10-20**) | ✅ como `chat` / `design` (Enterprise por uso). Team e Enterprise por assento: CSV de gastos com **só o excedente** (gasto acima da cota do assento; vazio se o uso extra estiver desligado), ou seja, visão parcial, não o consumo total |
 | **Assinatura pessoal Pro / Max** | ✅ em máquina instrumentada | ❌ a Anthropic não expõe API para planos pessoais |
 | **Claude via Bedrock, Vertex, Foundry** | ✅ os hooks funcionam para Claude Code | ❌ usar o billing da nuvem |
 
@@ -37,7 +37,7 @@ Regra prática: as camadas 1 + 2 respondem *o que está acontecendo agora e como
 - **Preciso de uma chave da Anthropic?** Só para a camada 3. As camadas 1 + 2 usam um token de ingest do Dynatrace e o login normal do Claude.
 - **O workflow é só para o claude.ai?** Não. Ele importa o uso oficial da org inteira: Claude Code (Desktop, CLI, web) mais chat, Cowork e Design quando a org é Enterprise; Claude Code e uso de API quando é org do Console.
 - **Funciona para Cowork?** Sim, de duas formas. Tempo real: o admin do claude.ai liga a exportação OpenTelemetry do próprio Cowork (Team e Enterprise) e aponta para o endpoint de logs do Dynatrace ou para um collector alcançável; os eventos chegam como `event.name == "api_request"` com tokens, custo e `user.email`, igual à camada 2 (ver [Telemetria do Cowork](#telemetria-do-cowork)). Oficial: camada 3 como produto `cowork` em Enterprise por uso. Cowork não tem hooks, então não há spans `gen_ai` nem input/output de tool calls.
-- **E o chat do claude.ai no plano Team?** Nenhuma fonte dá tokens totais por usuário: não há API (confirmado na doc da Anthropic e por fornecedores de FinOps como a Finout) e o CSV de gastos lista **só o excedente** acima da cota do assento. O gap do chat fecha quando o *Chat and Cowork unified* chegar ao plano, porque as conversas passam a sair pela exportação OTel do Cowork. Ferramentas que "automatizam" o CSV do Team fazem isso com navegador headless na sessão de um Owner; este asset não entrega isso.
+- **E o chat do claude.ai no plano Team?** Nenhuma fonte dá tokens totais por usuário: não há API (confirmado na doc da Anthropic e por fornecedores de FinOps como a Finout) e o CSV de gastos lista **só o excedente** acima da cota do assento. O gap fecha ligando o *Chat and Cowork unified* (toggle beta, já disponível no Team): as conversas passam a rodar como sessões Cowork e saem pela exportação OTel do Cowork com tokens e custo por usuário (validado em 2026-10-20). Ferramentas que "automatizam" o CSV do Team fazem isso com navegador headless na sessão de um Owner; este asset não entrega isso.
 - **Por que vejo texto `<system-reminder>` nos prompts?** Não deveria mais: o hook remove os blocos que o app Desktop injeta. Spans antigos continuam com eles.
 - **Uso o Desktop com assinatura pessoal. O que ganho?** Tudo das camadas 1 + 2 na sua máquina; nada da camada 3.
 - **De quanto em quanto tempo a camada 3 roda?** Uma vez por dia, às 15:00 UTC (12:00 em Brasília), os três workflows; as camadas 1 + 2 são em tempo real. Rodar mais vezes não traz dado novo: a API Console só devolve buckets fechados, o dado Enterprise do dia D fica completo por volta das 13:30 UTC de D+1 e é revisado por ~7 dias (cada execução relê 10 dias e a revisão mais nova vence pelo `dedup.key`), e a cota de 60 req/min é da org inteira. Para ver o dia corrente antes disso, execute o workflow manualmente (`dtctl exec workflow <id> --wait`); para mudar o horário, edite o agendamento do workflow no tenant ou em `connector/workflow/build.py`.
@@ -273,33 +273,43 @@ Detalhes: o `service.name` nativo é definido pelo Claude Code (`claude-code-des
 
 As sessões do Cowork (locais no app Desktop e na nuvem a partir do desktop, web ou mobile) não passam pelo hook do Claude Code, mas a Anthropic exporta os eventos delas por OpenTelemetry quando um admin do claude.ai configura um endpoint OTLP. Nada sai até isso ser feito. Fonte: [Monitor Claude Cowork activity with OpenTelemetry](https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry).
 
+**Validado em 2026-10-20** com uma org Claude Team apontando para um tenant Dynatrace SaaS: sessões na nuvem a partir do claude.ai web (chat e Cowork unificados) chegaram como registros de log com tokens, custo, modelo e e-mail do usuário. Roteiro passo a passo com as queries em [`docs/dql/`](docs/dql/): [docs/cowork-validation.md](docs/cowork-validation.md).
+
 | Item | Valor |
 |---|---|
-| Planos | Team e Enterprise |
-| Onde | claude.ai → Organization settings → Cowork → Monitoring (admin da org) |
-| Protocolo | HTTP/protobuf ou HTTP/JSON; **use protobuf**, o endpoint OTLP do Dynatrace rejeita JSON |
-| Endpoint | `https://<env>.live.dynatrace.com/api/v2/otlp/v1/logs` (`.live.`, não `.apps.`), ou um OTel Collector alcançável pela nuvem da Anthropic **e** pelos desktops |
-| Header | `Authorization: Api-Token <token com logs.ingest>` (os headers ficam cifrados em repouso do lado da Anthropic) |
-| Eventos | prompts do usuário, chamadas de tool e MCP, acesso a arquivos, skills e plugins, decisões de aprovação, **requests de API** (`model`, contagem de tokens, custo estimado, duração) e erros de API; mesmo esquema de eventos da telemetria nativa do Claude Code (camada 2) |
-| Identidade | o e-mail do usuário vai sempre, independente da configuração de conteúdo |
-| Conteúdo | texto dos prompts, respostas e inputs de tool ficam **desligados por padrão** nas versões atuais do Desktop; ligar exige a device policy `otlpContentCapture` (builds antigos do Desktop podem enviar conteúdo se a policy não estiver definida, então defina `[]` por segurança); sessões web, mobile e agendadas na nuvem levam só metadados |
+| Planos | Team e Enterprise (validado no Team) |
+| Onde | claude.ai → Organization settings → Data and privacy → **Monitoring** → *Cowork, Cowork in the cloud, and unified chat and Cowork* (Owner / admin). Link direto: `claude.ai/admin-settings/data-privacy-controls#cowork-monitoring` |
+| OTLP endpoint | `https://<env>.live.dynatrace.com/api/v2/otlp` — a URL **base**, sem `/v1/logs` (o exportador acrescenta; validado). Use `.live.`, não `.apps.`. O host entra sozinho na allowlist de rede do Cowork |
+| OTLP protocol | **http/protobuf** (o endpoint OTLP do Dynatrace rejeita JSON) |
+| OTLP headers | `Authorization=Api-Token dt0c01.<público>.<secreto>` — formato `chave=valor`, como no exemplo do campo; token clássico com **Ingest logs** (`logs.ingest`). Cole o token logo depois de `Api-Token ` e confira que começa com um único `dt0c01.` (prefixo duplicado dá 401 e nada chega, sem erro nenhum no console) |
+| Resource attributes | opcional, ex.: `deployment.environment=validation,claude.org=<org>`; chegam como atributos do log e ajudam a filtrar |
+| Sinal | **só logs** (`/api/v2/otlp/v1/logs`); sem spans e sem métricas |
+| `service.name` | `cowork` (escopo `com.anthropic.claude_code.events`, `service.version` = versão do Claude Agent SDK) |
+| Onde a sessão rodou | `cowork.surface` (`remote` = sessão na nuvem; sessões locais do Desktop devem vir com outro valor) |
+| Eventos vistos | `api_request`, `user_prompt`, `assistant_response`, `tool_decision`, `tool_result`, `mcp_server_connection`, `plugin_loaded`, `hook_*`, `managed_settings_resolved`, `permission_mode_changed` — mesmos nomes e campos da telemetria nativa do Claude Code (camada 2) |
+| Campos do `api_request` | `model`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens` (+ `_5m` / `_1h`), `cost_usd`, `cost_usd_micros`, `duration_ms`, `ttft_ms`, `effort`, `speed`, `query_source`, `session.id`, `prompt.id`, `request_id` |
+| Identidade | `user.email`, `user.account_uuid`, `user.id`, `organization.id` sempre presentes |
+| Conteúdo | `prompt` chega como `<REDACTED>` (só `prompt_length`) por padrão; ligar conteúdo exige a device policy `otlpContentCapture` (defina `[]` para manter desligado em builds antigos do Desktop) |
 | Desktop mínimo | 1.1.4173 para sessões locais, 1.22209.3 para sessões na nuvem |
-
-Os dados entram no Grail como registros de log, então as queries da camada 2 valem sem mudança:
 
 ```dql
 fetch logs, from:now()-24h
-| filter event.name == "api_request"
-| summarize requests = count(), input = sum(toLong(input_tokens)), output = sum(toLong(output_tokens)),
-            custo_usd = sum(toDouble(cost_usd)) by: {user.email, model}
+| filter service.name == "cowork" and event.name == "api_request"
+| summarize requests = count(),
+            input = sum(toLong(input_tokens)), output = sum(toLong(output_tokens)),
+            cache_read = sum(toLong(cache_read_tokens)), cache_creation = sum(toLong(cache_creation_tokens)),
+            custo_usd = sum(toDouble(cost_usd)),
+  by: {user.email, model, cowork.surface}
 | sort custo_usd desc
 ```
 
 Observações:
 
-- **Status: documentado a partir do artigo da Anthropic, ainda não validado em tenant por este asset.** Roteiro de validação na org Team/Enterprise de um cliente, com as queries em [`docs/dql/`](docs/dql/): [docs/cowork-validation.md](docs/cowork-validation.md). Os nomes de campo dos eventos do Cowork devem bater com os do Claude Code (`event.name`, `model`, `input_tokens`, `cost_usd`, `user.email`); confirme no primeiro uso e ajuste os filtros do dashboard se o Cowork usar um `service.name` próprio.
-- Apontar o console admin direto para o Dynatrace é a configuração mais simples, mas coloca um token de ingest no console do claude.ai. Para redação ou fan-out, use um collector com endpoint HTTPS público; o collector local em `127.0.0.1:4318` deste asset não recebe sessões da nuvem.
-- O *Chat and Cowork unified* (beta no Enterprise, chegando a Pro/Max) transforma as conversas comuns em sessões Cowork, então, quando a org estiver nele, a mesma exportação cobre o chat. A policy de conteúdo não se aplica a conversas movidas para a nuvem nesse modo (só metadados).
+- **Dashboard.** O dashboard *Developers AI Usage* e as queries da camada 2 filtram `service.name` em `claude-code` / `claude-code-desktop`; inclua `cowork` nesses filtros para ver o Cowork ao lado do Claude Code. O Cowork não manda spans `gen_ai`, então os tiles baseados em spans continuam só com Claude Code.
+- **Chat unificado conta como Cowork.** Com o *Chat and Cowork unified* (toggle beta, disponível no Team e no Enterprise em Organization settings → Chat) as conversas comuns rodam como sessões Cowork e saem por esta exportação, então o gap do chat do claude.ai fecha para as orgs que ligarem. Validado: um chat comum no claude.ai web chegou como `service.name = cowork`, `cowork.surface = remote`.
+- **Atraso.** Na primeira execução, as sessões na nuvem levaram vários minutos para aparecer no Grail; espere até ~20 minutos antes de investigar.
+- **Onde fica o token.** Apontar o console admin direto para o Dynatrace coloca um token de ingest no console do claude.ai (cifrado em repouso pela Anthropic). Use um token dedicado, só com `logs.ingest`, para poder revogar isoladamente. Para redação ou fan-out, use um collector com endpoint HTTPS público; o collector local em `127.0.0.1:4318` deste asset não recebe sessões da nuvem.
+- **Office Agents** (add-ins de Excel, PowerPoint e Word) têm um bloco próprio de Monitoring na mesma página, com o botão *Copy settings from Cowork*; ainda não validado.
 - O Cowork também aparece na camada 3 como produto `cowork` (Enterprise por uso) e, como excedente, no CSV de gastos do Team.
 
 ---

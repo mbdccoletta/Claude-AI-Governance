@@ -39,6 +39,7 @@ Regra prática: as camadas 1 + 2 respondem *o que está acontecendo agora e como
 - **Funciona para Cowork?** Só pela camada 3 (chave Enterprise ou CSV do Team): tokens e custo diários por usuário. Cowork não tem hooks, então não há prompts nem tool calls.
 - **Por que vejo texto `<system-reminder>` nos prompts?** Não deveria mais: o hook remove os blocos que o app Desktop injeta. Spans antigos continuam com eles.
 - **Uso o Desktop com assinatura pessoal. O que ganho?** Tudo das camadas 1 + 2 na sua máquina; nada da camada 3.
+- **De quanto em quanto tempo a camada 3 roda?** Uma vez por dia, às 15:00 UTC (12:00 em Brasília), os três workflows; as camadas 1 + 2 são em tempo real. Rodar mais vezes não traz dado novo: a API Console só devolve buckets fechados, o dado Enterprise do dia D fica completo por volta das 13:30 UTC de D+1 e é revisado por ~7 dias (cada execução relê 10 dias e a revisão mais nova vence pelo `dedup.key`), e a cota de 60 req/min é da org inteira. Para ver o dia corrente antes disso, execute o workflow manualmente (`dtctl exec workflow <id> --wait`); para mudar o horário, edite o agendamento do workflow no tenant ou em `connector/workflow/build.py`.
 
 ## Planos da Anthropic × APIs: o que existe (verificado na documentação da Anthropic em 2026-10-19)
 

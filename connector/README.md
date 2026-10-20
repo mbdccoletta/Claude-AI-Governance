@@ -95,7 +95,11 @@ lookback window and the DQL `dedup dedup.key, sort: {timestamp desc}` keeps the 
 clamped to 20 s, and a back-off that would cross the deadline is not slept — the run ends partial instead. If `partial: true` shows up
 every day, shorten `enterprise_lookback_days` / `console_lookback_days` or split org types across workflows.
 
-Schedule: **daily 15:00 UTC** (Enterprise data for day D is normally complete by 13:00–13:30 UTC on D+1).
+Schedule: **daily 15:00 UTC**, the only trigger (no hourly or event trigger). Why once a day and why that hour: Enterprise data for day D is
+normally complete by 13:00–13:30 UTC on D+1 and is revised for ~7 days (hence the 10-day re-read; the newest revision wins by `dedup.key`);
+the Console `usage_report/messages` endpoint returns closed buckets only (today arrives through 1 h buckets); and the 60 req/min budget is
+shared by the whole org. A manual run (`dtctl exec workflow <id> --wait --show-results`) is the way to see the current day earlier; the
+time itself is `trigger.schedule.time` in `workflow/build.py` (or edit the workflow in the tenant).
 The four tasks are `resolve_config` → (`enterprise_analytics` | `console_claude_code` | `team_reminder`), each gated by
 `result("resolve_config").org_type`. Each task stays within the 120 s runtime limit: ≥ 1.1 s between Anthropic calls
 (60 req/min org-wide budget, shared), backoff on 429/5xx honouring `Retry-After`, restart on 410 (expired cursor), ingest

@@ -43,6 +43,7 @@ Rule of thumb: layers 1 + 2 answer *what is happening right now and how* on the 
 - **Does it work for Cowork?** Only through layer 3 (Enterprise key or Team CSV): daily tokens and cost per user. Cowork has no hooks, so no prompts or tool calls.
 - **Why do I see `<system-reminder>` text in prompts?** You should not any more: the hook strips the blocks the Desktop app injects. Older spans keep them.
 - **I use the Desktop app with a personal subscription. What do I get?** Everything from layers 1 + 2 on your machine; nothing from layer 3.
+- **How often does layer 3 run?** Once a day, 15:00 UTC, all three workflows; layers 1 + 2 are real time. Running more often brings nothing new: the Console API only returns closed buckets, Enterprise data for day D is complete around 13:30 UTC on D+1 and gets revised for ~7 days (each run re-reads 10 days, newest revision wins by `dedup.key`), and the 60 req/min budget is shared org-wide. To see today earlier, run the workflow by hand (`dtctl exec workflow <id> --wait`); to change the time, edit the workflow's schedule in the tenant or `connector/workflow/build.py`.
 
 <a id="plans-vs-apis"></a>
 ## Anthropic plans vs APIs: what exists (verified in Anthropic's docs, 2026-10-19)

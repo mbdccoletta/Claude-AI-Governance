@@ -303,6 +303,29 @@ fetch logs, from:now()-24h
 | sort custo_usd desc
 ```
 
+**O que é exportado depende do modo de chat da org** (validado em 2026-10-20 numa org Team):
+
+| Configuração da org *Chat and Cowork unified* | Cowork (web e Desktop) | Chat (web e Desktop) |
+|---|---|---|
+| **Desligado** — seletor clássico Chat \| Cowork | ✅ exporta (validado pelo app Desktop com pasta local) | ❌ não exporta |
+| **Ligado** (beta) — uma Home só, sem Cowork separado | ✅ exporta (validado pelo claude.ai web) | ✅ exporta como `service.name = cowork` (validado pelo claude.ai web; o chat do Desktop deve se comportar igual) |
+
+**Recomendação:** para ver *tudo* (Claude Code + Cowork + chat) por desenvolvedor, ligue o **Chat and Cowork unified** (Organization settings → Chat). Antes de fazer isso num cliente, avise que é beta, que os usuários perdem o seletor Chat/Cowork e as conversas passam a rodar na nuvem da Anthropic, e que o time de segurança pode precisar revisar execução de código e acesso a arquivos na nuvem (a Anthropic linka um guia de segurança no próprio toggle). Deixe *Acesso antecipado: Execute o Cowork na nuvem* como está; é outra configuração e ficou desligada durante a validação.
+
+Telas (host do tenant e nome da org mascarados):
+
+| Organization settings → Data and privacy → Monitoring, vazio | Configurado |
+|---|---|
+| ![Formulário de Monitoring vazio](docs/images/cowork/monitoring-empty.png) | ![Formulário de Monitoring configurado](docs/images/cowork/monitoring-configured.png) |
+
+| Desktop, unificado **ligado** (Home, sem aba Cowork) | Desktop, unificado **desligado** (seletor Chat \| Cowork) |
+|---|---|
+| ![Home unificada do Desktop](docs/images/cowork/desktop-unified-home.png) | ![Chat e Cowork clássicos no Desktop](docs/images/cowork/desktop-classic-chat-cowork.png) |
+
+Bloco do Office Agents com *Copy settings from Cowork*: ![Office Agents](docs/images/cowork/office-agents-copy-settings.png)
+
+**No dashboard:** a seção *Cowork e chat unificado* do *Developers AI Usage* é alimentada por esses eventos assim que chegam (validado no tenant de laboratório: custo, requests, devs ativos, tokens, tokens por modelo e top devs com `cowork.surface`).
+
 Observações:
 
 - **Dashboards.** O *Developers AI Usage* tem a seção **Cowork e chat unificado** (custo, requests, devs ativos, tokens, tokens ao longo do tempo por modelo e top devs com `cowork.surface`), lida desses logs; os outros tiles leem spans `gen_ai`, que o Cowork não manda, e as variáveis Provider/Modelo não se aplicam à seção do Cowork. As queries de log da camada 2 em [docs/dql-examples.md](docs/dql-examples.md) aceitam `cowork` ao lado de `claude-code` / `claude-code-desktop`, e os tiles de cobertura da camada 3 comparam `claude_code` e `cowork` por produto.

@@ -42,9 +42,26 @@ Se o tenant restringe leitura de logs por grupo IAM, confira que o grupo de quem
 
 4. Salve.
 
+![Monitoring configurado](images/cowork/monitoring-configured.png)
+
+Se o cliente também usa os add-ins de Office, clique em *Copy settings from Cowork* no bloco **Office Agents**.
+
 O exportador acrescenta `/v1/logs` sozinho (validado em 2026-10-20). No campo de header, cole o token logo depois de `Api-Token ` e confira que ele começa com **um único** `dt0c01.`: prefixo duplicado dá 401 e nada chega, sem erro visível no console. Não habilite captura de conteúdo para a validação: tokens, modelo, custo e e-mail já vêm por padrão. Para garantir que nenhum build antigo do Desktop envie conteúdo, o admin pode definir a device policy `otlpContentCapture` como `[]`.
 
 Alternativa quando o cliente não quer o token no console da Anthropic ou precisa de redação: apontar para um OpenTelemetry Collector com endpoint HTTPS público, que a nuvem da Anthropic e os desktops alcancem, e dele para o Dynatrace. O collector local em `127.0.0.1:4318` deste asset não serve para isso.
+
+## 3b. Modo de chat da org
+
+| *Chat and Cowork unified* | O que exporta |
+|---|---|
+| Desligado (seletor Chat \| Cowork no Desktop) | só Cowork |
+| Ligado (beta, Home única) | Cowork **e** chat |
+
+Para medir tudo, ligue em Organization settings → Chat, depois de alinhar com o cliente (beta, muda a experiência dos usuários, revisão de segurança).
+
+| Unificado ligado | Unificado desligado |
+|---|---|
+| ![Home unificada](images/cowork/desktop-unified-home.png) | ![Chat e Cowork clássicos](images/cowork/desktop-classic-chat-cowork.png) |
 
 ## 4. Gerar tráfego (2 usuários, 5 min)
 

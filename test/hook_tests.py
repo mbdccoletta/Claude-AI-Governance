@@ -89,6 +89,35 @@ def main():
         check(not state_path.exists() and not pathlib.Path(str(state_path) + ".lock").exists(), f"[{capture}] SessionEnd removes state and lock")
         # a second turn starts from the new offset (no double counting of the previous turn)
         tr.write_text(tr.read_text())  # unchanged
+    # --- hook installed mid-session: Stop with no stored turn start must count only the current turn
+    SPANS.clear()
+    (claude / "otel-attrs.json").write_text(json.dumps({"_collector_port": port, "_capture_prompts": "false"}))
+    tr2 = pathlib.Path(home) / "mid.jsonl"
+    hist = []
+    for k in range(3):  # three earlier turns with large usage
+        hist.append({"type": "user", "message": {"role": "user", "content": f"old prompt {k}"}})
+        hist.append({"type": "assistant", "message": {"role": "assistant", "model": "claude-x", "usage": {"input_tokens": 100000, "output_tokens": 50000}, "content": [{"type": "text", "text": "old"}]}})
+        hist.append({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": f"t{k}", "content": "r"}]}})
+    hist.append({"type": "user", "isMeta": True, "message": {"role": "user", "content": "<system-reminder>meta</system-reminder>"}})
+    hist.append({"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "current prompt"}]}})
+    hist.append({"type": "assistant", "message": {"role": "assistant", "model": "claude-y", "usage": {"input_tokens": 7, "cache_read_input_tokens": 3, "output_tokens": 2}, "content": [{"type": "text", "text": "a"}]}})
+    hist.append({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tz", "content": "r"}]}})
+    hist.append({"type": "assistant", "message": {"role": "assistant", "model": "claude-y", "usage": {"input_tokens": 5, "output_tokens": 4}, "content": [{"type": "text", "text": "b"}]}})
+    tr2.write_text("".join(json.dumps(h) + "\n" for h in hist))
+    run_hook(env, {"session_id": "mid", "hook_event_name": "Stop", "transcript_path": str(tr2)}); time.sleep(0.5)
+    chat = [s for s in SPANS if s["name"].startswith("chat")]
+    a = attrs(chat[0]) if chat else {}
+    check(len(chat) == 1 and int(a.get("gen_ai.usage.input_tokens", -1)) == 15 and int(a.get("gen_ai.usage.output_tokens", -1)) == 6,
+          f"mid-session install: Stop counts only the turn after the last human prompt (in={a.get('gen_ai.usage.input_tokens')}, out={a.get('gen_ai.usage.output_tokens')})")
+    # no human prompt at all -> no token attributes instead of the whole history
+    SPANS.clear()
+    tr3 = pathlib.Path(home) / "noprompt.jsonl"
+    tr3.write_text(json.dumps({"type": "assistant", "message": {"role": "assistant", "model": "claude-x", "usage": {"input_tokens": 999999, "output_tokens": 1}, "content": []}}) + "\n")
+    run_hook(env, {"session_id": "noprompt", "hook_event_name": "Stop", "transcript_path": str(tr3)}); time.sleep(0.5)
+    chat = [s for s in SPANS if s["name"].startswith("chat")]
+    a = attrs(chat[0]) if chat else {}
+    check(len(chat) == 1 and "gen_ai.usage.input_tokens" not in a, "no human prompt in transcript: span carries no token counts")
+
     # dead collector must not block
     (claude / "otel-attrs.json").write_text(json.dumps({"_collector_port": 1, "_capture_prompts": "false"}))
     t0 = time.time(); run_hook(env, {"session_id": "x", "hook_event_name": "UserPromptSubmit", "prompt": "p", "transcript_path": str(tr)}); run_hook(env, {"session_id": "x", "hook_event_name": "Stop", "transcript_path": str(tr)})

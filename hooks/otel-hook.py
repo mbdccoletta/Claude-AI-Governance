@@ -128,6 +128,48 @@ def turn_usage(transcript_path, session_id, start_offset):
         result["cost_usd"] = round(cost, 6)
     return result
 
+def is_human_prompt(entry):
+    """True for a transcript line that is a prompt typed by the user (start of a turn):
+    role user, not a meta/system-injected line, and no tool_result blocks."""
+    if not isinstance(entry, dict) or entry.get("isMeta"):
+        return False
+    msg = entry.get("message") if isinstance(entry.get("message"), dict) else entry
+    if not isinstance(msg, dict) or msg.get("role") != "user":
+        return False
+    content = msg.get("content")
+    if isinstance(content, str):
+        return bool(content.strip())
+    if isinstance(content, list):
+        types = {b.get("type") for b in content if isinstance(b, dict)}
+        return "tool_result" not in types and bool(types & {"text", "image", "document"})
+    return False
+
+def last_prompt_offset(transcript_path, session_id=""):
+    """Byte offset where the current turn starts: the last human prompt in the transcript.
+    Used when no UserPromptSubmit was seen for this session (hook installed mid-session, state
+    lost), so the Stop span counts only the current turn instead of the whole history.
+    Returns None when no prompt can be found."""
+    path = transcript_path
+    if not path or not os.path.isfile(path):
+        files = glob.glob(os.path.expanduser(f"~/.claude/projects/*/{session_id}.jsonl")) if session_id else []
+        path = files[0] if files else None
+    if not path:
+        return None
+    found = None
+    try:
+        pos = 0
+        with open(path, "rb") as f:
+            for raw in f:
+                try:
+                    if is_human_prompt(json.loads(raw)):
+                        found = pos
+                except Exception:
+                    pass
+                pos += len(raw)
+    except Exception:
+        return None
+    return found
+
 def transcript_offset(transcript_path):
     try:
         return os.path.getsize(transcript_path) if transcript_path and os.path.isfile(transcript_path) else 0
@@ -318,7 +360,19 @@ def handle_event(event, hook_event, tool_name, tool_key, session_id, transcript,
         dur_ms      = (now_ns - start_ns) / 1e6
 
         # Modelo, tokens (somados sobre todas as chamadas do turno) e resposta vêm do JSONL da sessão
-        assistant   = turn_usage(transcript, session_id, state.get("transcript_offset", 0))
+        # Turn start: offset saved at UserPromptSubmit (or by the previous Stop). Without one — hook
+        # installed mid-session or state lost — start at the last human prompt; if none is found,
+        # report no token counts rather than summing the whole session history.
+        offset = state.get("transcript_offset")
+        usage_known = True
+        if not isinstance(offset, int):
+            offset = last_prompt_offset(transcript, session_id)
+            if offset is None:
+                usage_known = False
+                offset = transcript_offset(transcript)
+        assistant   = turn_usage(transcript, session_id, offset)
+        if not usage_known:
+            assistant["input_tokens"] = assistant["output_tokens"] = assistant["cost_usd"] = None
         completion  = assistant["text"]
         if assistant["model"]:
             model = assistant["model"]

@@ -1,0 +1,12 @@
+// Cowork validation — step 3: tokens and estimated cost per user and model (last 24 h).
+// Same query the asset uses for Claude Code native telemetry (layer 2).
+// If step 1 shows events but this returns nothing, the field names differ: use step 2 to map them.
+fetch logs, from:now()-24h
+| filter event.name == "api_request"
+| summarize requests = count(),
+            input_tokens = sum(toLong(input_tokens)),
+            output_tokens = sum(toLong(output_tokens)),
+            cache_read_tokens = sum(toLong(cache_read_tokens)),
+            cost_usd = sum(toDouble(cost_usd))
+  by: {service.name, user.email, model}
+| sort cost_usd desc

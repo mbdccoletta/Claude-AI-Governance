@@ -1,0 +1,14 @@
+// Cowork validation — step 4 (only if nothing arrives): is the tenant receiving or rejecting OTLP logs?
+// 4a. Discover which OTLP ingest self-monitoring metrics this tenant exposes (names vary by version):
+metrics
+| filter matchesValue(metric.key, "dsfm:*otlp*")
+| fields metric.key
+| dedup metric.key
+
+// 4b. Then chart the log-ingest ones found above, for example (replace with the keys from 4a):
+// timeseries { received = sum(`<received key from 4a>`, default: 0),
+//              rejected = sum(`<rejected key from 4a>`, default: 0) }, from:now()-2h, interval: 5m
+//
+// Reading: rejected > 0 → payload problem (JSON instead of protobuf, wrong path).
+//          received = 0 and nothing in step 1 → the endpoint is never reached or auth fails
+//          (401/403: token without logs.ingest; wrong host; .apps. instead of .live.; Desktop too old).

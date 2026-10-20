@@ -1,0 +1,7 @@
+// Cowork validation — step 2: one full api_request record, to confirm field names.
+// Send the result (minus the e-mail if you prefer) back to the asset maintainer so the
+// dashboard filters can be adjusted if Cowork names fields differently from Claude Code.
+fetch logs, from:now()-1h
+| filter event.name == "api_request"
+| sort timestamp desc
+| limit 1

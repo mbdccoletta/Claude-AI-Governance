@@ -297,7 +297,7 @@ fetch logs, from:now()-24h
 
 Observações:
 
-- **Status: documentado a partir do artigo da Anthropic, ainda não validado em tenant por este asset.** Os nomes de campo dos eventos do Cowork devem bater com os do Claude Code (`event.name`, `model`, `input_tokens`, `cost_usd`, `user.email`); confirme no primeiro uso e ajuste os filtros do dashboard se o Cowork usar um `service.name` próprio.
+- **Status: documentado a partir do artigo da Anthropic, ainda não validado em tenant por este asset.** Roteiro de validação na org Team/Enterprise de um cliente, com as queries em [`docs/dql/`](docs/dql/): [docs/cowork-validation.md](docs/cowork-validation.md). Os nomes de campo dos eventos do Cowork devem bater com os do Claude Code (`event.name`, `model`, `input_tokens`, `cost_usd`, `user.email`); confirme no primeiro uso e ajuste os filtros do dashboard se o Cowork usar um `service.name` próprio.
 - Apontar o console admin direto para o Dynatrace é a configuração mais simples, mas coloca um token de ingest no console do claude.ai. Para redação ou fan-out, use um collector com endpoint HTTPS público; o collector local em `127.0.0.1:4318` deste asset não recebe sessões da nuvem.
 - O *Chat and Cowork unified* (beta no Enterprise, chegando a Pro/Max) transforma as conversas comuns em sessões Cowork, então, quando a org estiver nele, a mesma exportação cobre o chat. A policy de conteúdo não se aplica a conversas movidas para a nuvem nesse modo (só metadados).
 - O Cowork também aparece na camada 3 como produto `cowork` (Enterprise por uso) e, como excedente, no CSV de gastos do Team.

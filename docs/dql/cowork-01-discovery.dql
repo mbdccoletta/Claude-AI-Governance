@@ -1,0 +1,8 @@
+// Cowork validation — step 1: what is arriving? (run right after the first Cowork session)
+// Lists every OTel log event received in the last hour by service and event name.
+// Expect rows such as api_request, user_prompt, tool_result. Note the service.name Cowork uses.
+fetch logs, from:now()-1h
+| filter isNotNull(event.name)
+| summarize events = count(), first = min(timestamp), last = max(timestamp)
+  by: {service.name, event.name}
+| sort events desc

@@ -5,6 +5,18 @@ Versão 1.0.0 · Dynatrace Solutions Engineering LATAM
 
 ---
 
+## Credenciais necessárias
+
+| Você quer | Dynatrace | Anthropic | Quem cria |
+|---|---|---|---|
+| Camadas 1 + 2: prompts, tokens, custo e tool calls do Claude Desktop / CLI nas máquinas instrumentadas | token de ingest (`openTelemetryTrace.ingest`, `metrics.ingest`, `logs.ingest`) | **nenhuma** — o Claude continua com o login normal | admin Dynatrace; cada dev cola uma vez no instalador |
+| Camada 3, org Claude **Enterprise** (chat, Cowork, Design, Claude Code de todos) | contexto dtctl + credencial no vault | **Analytics API key** | primary owner da org, claude.ai → Organization settings → API |
+| Camada 3, org Claude **Console / API** (Claude Code por usuário, API por workspace) | idem | **Admin API key** `sk-ant-admin01-…` | admin da org, platform.claude.com/settings/admin-keys |
+| Camada 3, plano **Team** | token com `bizevents.ingest` para o importador CSV | nenhuma — exportação manual do CSV | admin Team, claude.ai → Settings → Analytics |
+| Dynatrace Evals (opcional) | platform token (`dt-evals doctor`) | uma API key comum para o LLM juiz (ou outro provedor) | quem roda os evals |
+
+A chave da Anthropic é guardada uma vez no Credential vault do tenant e lida pelo workflow pelo nome; nunca chega às máquinas dos desenvolvedores.
+
 ## Visão geral
 
 Este asset leva a telemetria do Claude Code (tokens, custo, modelo, duração e tool calls por desenvolvedor) para o Dynatrace **sem precisar do VS Code**. Ele reaproveita o hook Python, a configuração do OTel Collector e o dashboard do asset [dt-ai-observability-vscode](../dt-ai-observability-vscode), mas instala tudo como um serviço de usuário (launchd, systemd --user ou Tarefa Agendada) com o token guardado no cofre de credenciais do sistema operacional.

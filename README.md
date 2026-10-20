@@ -19,6 +19,18 @@ Diagrams: [one-page overview](docs/overview.svg) · [data collection architectur
 
 ---
 
+## Credentials you need
+
+| You want | Dynatrace | Anthropic | Who creates it |
+|---|---|---|---|
+| Layers 1 + 2: prompts, tokens, cost and tool calls from Claude Desktop / CLI on instrumented machines | ingest API token (`openTelemetryTrace.ingest`, `metrics.ingest`, `logs.ingest`) | **none** — Claude keeps its normal login | Dynatrace admin; each developer pastes it once into the installer |
+| Layer 3, Claude **Enterprise** org (claude.ai chat, Cowork, Design, Claude Code of every user) | dtctl OAuth context + Credential vault entry | **Analytics API key** | the org's primary owner, claude.ai → Organization settings → API |
+| Layer 3, Claude **Console / API** org (Claude Code per user, API per workspace) | same | **Admin API key** `sk-ant-admin01-…` | an org admin, platform.claude.com/settings/admin-keys |
+| Layer 3, Claude **Team** plan | ingest token with `bizevents.ingest` for the CSV importer | none — manual CSV export | a Team admin, claude.ai → Settings → Analytics |
+| Optional Dynatrace Evals | platform token (`dt-evals doctor`) | one regular API key for the LLM judge (or another provider) | whoever runs the evals |
+
+The Anthropic key is stored once in the tenant's Credential vault and read by the workflow by name; it never reaches developer machines.
+
 ### How it works
 
 ```

@@ -187,7 +187,8 @@ def main():
     ap.add_argument("--org-id", default=None)
     ap.add_argument("--batch-size", type=int, default=500)
     ap.add_argument("--token-env", default="DT_INGEST_TOKEN")
-    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--dry-run", action="store_true", help="print the events (JSON array) instead of sending")
+    ap.add_argument("--preview", action="store_true", help="print a JSON summary of what would be sent (no tenant needed) and exit")
     ap.add_argument("--allow-http", action="store_true", help="allow a plain http:// tenant URL (local tests only)")
     a = ap.parse_args()
 
@@ -200,6 +201,23 @@ def main():
     events = read_csv(a.csv, a.date, a.org_id)
     total_cost = round(sum(e["cost_usd"] for e in events), 2)
     print(f"[team_csv] {len(events)} events from {a.csv} for {a.date}; users={len({e['user.email'] for e in events})} net_spend_usd={total_cost}", file=sys.stderr)
+
+    if a.preview:
+        by_product = {}
+        for e in events:
+            d = by_product.setdefault(e["product"], {"events": 0, "requests": 0, "tokens": 0, "cost_usd": 0.0})
+            d["events"] += 1; d["requests"] += e["requests"]; d["tokens"] += e["tokens.total"]; d["cost_usd"] = round(d["cost_usd"] + e["cost_usd"], 2)
+        print(json.dumps({
+            "file": a.csv, "date": a.date, "org_id": a.org_id, "source": SOURCE,
+            "events": len(events), "users": len({e["user.email"] for e in events if e["user.email"]}),
+            "rows_without_email": sum(1 for e in events if not e["user.email"]),
+            "unknown_products": sorted({str(e["product.raw"]) for e in events if e["product"] == "other"}),
+            "models": sorted({e["model"] for e in events}),
+            "requests": sum(e["requests"] for e in events), "tokens_total": sum(e["tokens.total"] for e in events),
+            "net_spend_usd": total_cost, "gross_spend_usd": round(sum(e["cost.gross_usd"] for e in events), 2),
+            "by_product": by_product,
+        }, indent=2))
+        return
 
     if a.dry_run:
         print(json.dumps(events, indent=2))

@@ -166,6 +166,17 @@ print("REQUESTS_OK" if not bad and matched else "REQUESTS_FAIL"); sys.exit(1 if 
     --csv "$ROOT/csv-import/sample.csv" --date 2026-10-18 --org-id org_team_demo --tenant "$DT_MOCK_URL"
   echo
 
+  echo "--- [9b] one-command wrapper import-team-csv.sh -> mock sink (token path, --yes, preview + file-date warning; day 2026-10-17 so dedup.keys differ from 9/9) ---"
+  WRAP_TOKEN="dt0c01.$(printf 'A%.0s' $(seq 24)).$(printf 'B%.0s' $(seq 64))"
+  DT_BIZEVENTS_TOKEN="$WRAP_TOKEN" "$ROOT/csv-import/import-team-csv.sh" "$ROOT/csv-import/sample.csv" --date 2026-10-17 --org-id org_team_wrap --token --tenant "$DT_MOCK_URL" --yes 2>&1 | sed "s#$ROOT#<ROOT>#g" | grep -v "^$" | sed 's/^/  /'
+  curl -s "$DT_MOCK_URL/_sink" | python3 -c '
+import json, sys
+d = json.load(sys.stdin); ev = d if isinstance(d, list) else d.get("events", d)
+n = sum(1 for e in ev if e.get("org.id") == "org_team_wrap" and e.get("source") == "team_csv")
+print(("ASSERT_OK   wrapper delivered %d team_csv events via the token path" % n) if n == 8 else ("ASSERT_FAIL wrapper delivered %d events, expected 8" % n)); sys.exit(0 if n == 8 else 1)'
+  "$ROOT/csv-import/import-team-csv.sh" "$ROOT/csv-import/sample.csv" --date 2026-10-18 --dry-run >/dev/null 2>&1 && echo "ASSERT_OK   wrapper --dry-run exits 0 without credentials"
+  echo
+
   echo "--- dedup.key parity (Python importer vs JS common.js) for (alice@example.com, chat, claude-sonnet-5-5, 2026-10-18, team_csv) ---"
   PY_KEY=$(python3 -c 'import sys; sys.path.insert(0, "'"$ROOT"'/csv-import"); import import_team_spend as m; print(m.dedup_key("alice@example.com","chat","claude-sonnet-5-5","2026-10-18","team_csv"))')
   JS_KEY=$(node --input-type=module -e '

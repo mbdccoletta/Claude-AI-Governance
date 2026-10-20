@@ -54,6 +54,14 @@ re-run the installer and `connector/deploy/deploy.sh` to pick everything up.
 - Re-install: waits for the previous collector to exit, probes ports with `SO_REUSEADDR` and retries the default port briefly, so a
   re-install no longer drifts silently to 4319.
 
+### Team CSV: one command, no guesswork
+- New `connector/csv-import/import-team-csv.sh` / `.ps1`: usage day defaults to yesterday (UTC) with a file-date sanity check, tenant
+  taken from the layer 1/2 install, delivery through **dtctl with the user's own login** (`ingest_events.js`, no token) or a
+  `bizevents.ingest` token kept in the OS credential store (`--save-token`), preview (events, users, USD, products, models) and `[y/N]`
+  confirmation before sending, `--dry-run` / `--yes`. `import_team_spend.py` gains `--preview`.
+- New skill `connector/skills/import-team-csv/SKILL.md` so Claude can run the import on request. Both delivery paths verified
+  (mock sink and a real tenant).
+
 ### Shared dashboard compatibility
 - `--squad` / `-Squad` now also writes `user.team` (same value), the key the *Developers AI Usage* dashboard of the VS Code asset — and this
   asset's Claude-only copy — groups by in "Custo por time" / "Uso por time"; those tiles were empty for machines instrumented by this asset.

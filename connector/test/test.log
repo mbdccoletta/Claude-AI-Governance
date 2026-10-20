@@ -1,18 +1,18 @@
-=== dt-ai-observability-claude connector — local test run 2026-10-20T04:30:21Z ===
+=== dt-ai-observability-claude connector — local test run 2026-10-20T12:20:03Z ===
 node v22.22.0, Python 3.9.6, mock=http://127.0.0.1:8787
 
 --- [1/9] enterprise adapter (org_type=enterprise, 10-day window, cost+usage, 2 pages each, 429 on first call) ---
 [resolve_config] WARNING: allow_custom_base_url=true — the Anthropic key will be sent to http://127.0.0.1:8787 (mock/test use only)
 [resolve_config] org_type=enterprise base=http://127.0.0.1:8787 dry_run=false credential=CREDENTIALS_VAULT-MOCK budget_ms=95000 input_keys=[org_type,credential_id,anthropic_base_url,allow_custom_base_url,enterprise_lookback_days] param_overrides=[]
-RESULT resolve_config (1 ms): {"org_type":"enterprise","credential_id":"CREDENTIALS_VAULT-MOCK","credential_name":"","anthropic_base_url":"http://127.0.0.1:8787","allow_custom_base_url":true,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":95000}
+RESULT resolve_config (2 ms): {"org_type":"enterprise","credential_id":"CREDENTIALS_VAULT-MOCK","credential_name":"","anthropic_base_url":"http://127.0.0.1:8787","allow_custom_base_url":true,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":95000}
 [enterprise] window 2026-10-10T00:00:00.000Z .. 2026-10-20T00:00:00.000Z (10 days)
 [enterprise] [anthropic] 429 on /v1/organizations/analytics/user_cost_report; backing off 1000 ms (attempt 1/5)
 [enterprise] [anthropic] 429 on /v1/organizations/analytics/user_usage_report; backing off 1000 ms (attempt 1/5)
 [enterprise] [ingest] 356/356 events
-[enterprise] {"source":"enterprise_api","events":356,"ingested":356,"api_calls":6,"data_refreshed_at":"2026-10-19T23:30:24Z","org_id":"org_mock01","time_budget_ms":95000,"elapsed_ms":5546,"partial":false,"cost_rows":272,"usage_rows":259,"cost_pages":2,"usage_pages":2,"flushes":1,"events_built":356}
-RESULT enterprise_analytics (5546 ms): {"source":"enterprise_api","events":356,"ingested":356,"api_calls":6,"data_refreshed_at":"2026-10-19T23:30:24Z","org_id":"org_mock01","time_budget_ms":95000,"elapsed_ms":5546,"partial":false,"cost_rows":272,"usage_rows":259,"cost_pages":2,"usage_pages":2,"flushes":1,"events_built":356}
+[enterprise] {"source":"enterprise_api","events":356,"ingested":356,"api_calls":6,"data_refreshed_at":"2026-10-20T07:20:05Z","org_id":"org_mock01","time_budget_ms":95000,"elapsed_ms":5535,"partial":false,"cost_rows":272,"usage_rows":259,"cost_pages":2,"usage_pages":2,"flushes":1,"events_built":356}
+RESULT enterprise_analytics (5535 ms): {"source":"enterprise_api","events":356,"ingested":356,"api_calls":6,"data_refreshed_at":"2026-10-20T07:20:05Z","org_id":"org_mock01","time_budget_ms":95000,"elapsed_ms":5535,"partial":false,"cost_rows":272,"usage_rows":259,"cost_pages":2,"usage_pages":2,"flushes":1,"events_built":356}
 RESULT console_claude_code (0 ms): {"skipped":true,"reason":"org_type=enterprise"}
-RESULT team_reminder (0 ms): {"skipped":true,"reason":"org_type=enterprise"}
+RESULT team_reminder (1 ms): {"skipped":true,"reason":"org_type=enterprise"}
 ASSERT_OK   full run: partial=false, every accumulated entry ingested exactly once
 
 --- requests not doubled: sink enterprise_api events vs the mock's user_usage_report (cost rows carry requests too) ---
@@ -22,20 +22,20 @@ REQUESTS_OK
 --- [2/9] console adapter (org_type=console, credential looked up by NAME, 3 days claude_code + messages by model+workspace) ---
 [resolve_config] WARNING: allow_custom_base_url=true — the Anthropic key will be sent to http://127.0.0.1:8787 (mock/test use only)
 [resolve_config] org_type=console base=http://127.0.0.1:8787 dry_run=false credential=name:Anthropic console usage API key budget_ms=95000 input_keys=[org_type,anthropic_base_url,allow_custom_base_url,console_lookback_days] param_overrides=[]
-RESULT resolve_config (2 ms): {"org_type":"console","credential_id":"","credential_name":"Anthropic console usage API key","anthropic_base_url":"http://127.0.0.1:8787","allow_custom_base_url":true,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":95000}
+RESULT resolve_config (1 ms): {"org_type":"console","credential_id":"","credential_name":"Anthropic console usage API key","anthropic_base_url":"http://127.0.0.1:8787","allow_custom_base_url":true,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":95000}
 RESULT enterprise_analytics (0 ms): {"skipped":true,"reason":"org_type=console"}
 [console] days: 2026-10-20, 2026-10-19, 2026-10-18
 [console] [anthropic] 429 on /v1/organizations/usage_report/claude_code; backing off 1000 ms (attempt 1/5)
 [console] [anthropic] 429 on /v1/organizations/usage_report/messages; backing off 1000 ms (attempt 1/5)
 [console] [ingest] 40/40 events
-[console] {"source":"console_api","events":40,"ingested":40,"api_calls":10,"org_id":"org_mock01","days":["2026-10-20","2026-10-19","2026-10-18"],"time_budget_ms":95000,"elapsed_ms":9928,"partial":false,"claude_code_rows":18,"claude_code_pages":6,"api_rows":19,"api_pages":2,"flushes":1,"events_built":40}
-RESULT console_claude_code (9928 ms): {"source":"console_api","events":40,"ingested":40,"api_calls":10,"org_id":"org_mock01","days":["2026-10-20","2026-10-19","2026-10-18"],"time_budget_ms":95000,"elapsed_ms":9928,"partial":false,"claude_code_rows":18,"claude_code_pages":6,"api_rows":19,"api_pages":2,"flushes":1,"events_built":40}
+[console] {"source":"console_api","events":40,"ingested":40,"api_calls":10,"org_id":"org_mock01","days":["2026-10-20","2026-10-19","2026-10-18"],"time_budget_ms":95000,"elapsed_ms":9918,"partial":false,"claude_code_rows":18,"claude_code_pages":6,"api_rows":21,"api_pages":2,"flushes":1,"events_built":40}
+RESULT console_claude_code (9918 ms): {"source":"console_api","events":40,"ingested":40,"api_calls":10,"org_id":"org_mock01","days":["2026-10-20","2026-10-19","2026-10-18"],"time_budget_ms":95000,"elapsed_ms":9918,"partial":false,"claude_code_rows":18,"claude_code_pages":6,"api_rows":21,"api_pages":2,"flushes":1,"events_built":40}
 RESULT team_reminder (0 ms): {"skipped":true,"reason":"org_type=console"}
 ASSERT_OK   full run: partial=false, every accumulated entry ingested
 
 --- [3/9] team no-op task (org_type=team) ---
 [resolve_config] org_type=team base=https://api.anthropic.com dry_run=false credential=name:Anthropic team usage API key budget_ms=95000 input_keys=[org_type] param_overrides=[]
-RESULT resolve_config (1 ms): {"org_type":"team","credential_id":"","credential_name":"Anthropic team usage API key","anthropic_base_url":"https://api.anthropic.com","allow_custom_base_url":false,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":95000}
+RESULT resolve_config (2 ms): {"org_type":"team","credential_id":"","credential_name":"Anthropic team usage API key","anthropic_base_url":"https://api.anthropic.com","allow_custom_base_url":false,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":95000}
 RESULT enterprise_analytics (1 ms): {"skipped":true,"reason":"org_type=team"}
 RESULT console_claude_code (0 ms): {"skipped":true,"reason":"org_type=team"}
 [team] org_type=team: no Anthropic API exposes per-user usage for Team plans.
@@ -47,7 +47,7 @@ RESULT team_reminder (0 ms): {"source":"team_csv","events":0,"reminder":"org_typ
 --- [4/9] resolve_config guards: params cannot override credential/base URL; org_type must come from input; base URL pinned ---
 [resolve_config] ignoring run params not allowed to override the workflow input: anthropic_base_url, credential_id, credential_name, org_type
 [resolve_config] org_type=team base=https://api.anthropic.com dry_run=true credential=name:Anthropic team usage API key budget_ms=95000 input_keys=[org_type] param_overrides=[console_lookback_days,dry_run]
-RESULT resolve_config (1 ms): {"org_type":"team","credential_id":"","credential_name":"Anthropic team usage API key","anthropic_base_url":"https://api.anthropic.com","allow_custom_base_url":false,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":31,"console_include_api_usage":true,"dry_run":true,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":95000}
+RESULT resolve_config (2 ms): {"org_type":"team","credential_id":"","credential_name":"Anthropic team usage API key","anthropic_base_url":"https://api.anthropic.com","allow_custom_base_url":false,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":31,"console_include_api_usage":true,"dry_run":true,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":95000}
 ASSERT_OK   params ignored for base URL/credential/org_type; dry_run and lookback (clamped to 31) honoured
 ASSERT_OK   missing org_type in input fails fast (org_type is missing (input keys seen: []))
 ASSERT_OK   custom base URL rejected without allow_custom_base_url
@@ -62,26 +62,26 @@ ASSERT_OK   ingest_batch_size clamped to 1000, time_budget_ms clamped to the 2 s
 RESULT resolve_config (1 ms): {"org_type":"enterprise","credential_id":"CREDENTIALS_VAULT-MOCK","credential_name":"","anthropic_base_url":"http://127.0.0.1:8787","allow_custom_base_url":true,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":12000}
 [enterprise] window 2026-10-10T00:00:00.000Z .. 2026-10-20T00:00:00.000Z (10 days)
 [enterprise] [anthropic] 429 on /v1/organizations/analytics/user_cost_report; backing off 1000 ms (attempt 1/5)
-[enterprise] [anthropic] 429 on /v1/organizations/analytics/user_cost_report; backing off 20000 ms would pass the deadline (8689 ms left) — stopping here
+[enterprise] [anthropic] 429 on /v1/organizations/analytics/user_cost_report; backing off 20000 ms would pass the deadline (8693 ms left) — stopping here
 [enterprise] [anthropic] 429 on /v1/organizations/analytics/user_usage_report; backing off 1000 ms (attempt 1/5)
-[enterprise] budget low (2061 ms left): flushing 35 entries
+[enterprise] budget low (2072 ms left): flushing 35 entries
 [enterprise] [ingest] 35/35 events
-[enterprise] budget low (963 ms left): flushing 7 entries
+[enterprise] budget low (973 ms left): flushing 7 entries
 [enterprise] [ingest] 7/7 events
-[enterprise] {"source":"enterprise_api","events":41,"ingested":42,"api_calls":11,"data_refreshed_at":"2026-10-19T23:30:40Z","org_id":"org_mock01","time_budget_ms":12000,"elapsed_ms":12123,"partial":true,"reason":"time budget exhausted: retry of /v1/organizations/analytics/user_cost_report (20000 ms back-off) does not fit in the remaining 8689 ms (after 2 page(s) of v1/organizations/analytics/user_cost_report)","cost_rows":14,"usage_rows":42,"cost_pages":2,"usage_pages":6,"flushes":2,"events_built":42}
-RESULT enterprise_analytics (12123 ms): {"source":"enterprise_api","events":41,"ingested":42,"api_calls":11,"data_refreshed_at":"2026-10-19T23:30:40Z","org_id":"org_mock01","time_budget_ms":12000,"elapsed_ms":12123,"partial":true,"reason":"time budget exhausted: retry of /v1/organizations/analytics/user_cost_report (20000 ms back-off) does not fit in the remaining 8689 ms (after 2 page(s) of v1/organizations/analytics/user_cost_report)","cost_rows":14,"usage_rows":42,"cost_pages":2,"usage_pages":6,"flushes":2,"events_built":42}
+[enterprise] {"source":"enterprise_api","events":41,"ingested":42,"api_calls":11,"data_refreshed_at":"2026-10-20T07:20:21Z","org_id":"org_mock01","time_budget_ms":12000,"elapsed_ms":12110,"partial":true,"reason":"time budget exhausted: retry of /v1/organizations/analytics/user_cost_report (20000 ms back-off) does not fit in the remaining 8693 ms (after 2 page(s) of v1/organizations/analytics/user_cost_report)","cost_rows":14,"usage_rows":42,"cost_pages":2,"usage_pages":6,"flushes":2,"events_built":42}
+RESULT enterprise_analytics (12110 ms): {"source":"enterprise_api","events":41,"ingested":42,"api_calls":11,"data_refreshed_at":"2026-10-20T07:20:21Z","org_id":"org_mock01","time_budget_ms":12000,"elapsed_ms":12110,"partial":true,"reason":"time budget exhausted: retry of /v1/organizations/analytics/user_cost_report (20000 ms back-off) does not fit in the remaining 8693 ms (after 2 page(s) of v1/organizations/analytics/user_cost_report)","cost_rows":14,"usage_rows":42,"cost_pages":2,"usage_pages":6,"flushes":2,"events_built":42}
 ASSERT_OK   partial=true with a reason, events ingested before the deadline, 20 s Retry-After not slept (cost stopped at 2 pages), usage still paged
 ASSERT_OK   sink holds enterprise_api events from the partial run
 
 --- [6/9] time budget, console: 1-row pages, time_budget_ms=8000 -> stops between day chains, partial with events ---
 [resolve_config] WARNING: allow_custom_base_url=true — the Anthropic key will be sent to http://127.0.0.1:8787 (mock/test use only)
 [resolve_config] org_type=console base=http://127.0.0.1:8787 dry_run=false credential=name:Anthropic console usage API key budget_ms=8000 input_keys=[org_type,anthropic_base_url,allow_custom_base_url,console_lookback_days,time_budget_ms] param_overrides=[]
-RESULT resolve_config (1 ms): {"org_type":"console","credential_id":"","credential_name":"Anthropic console usage API key","anthropic_base_url":"http://127.0.0.1:8787","allow_custom_base_url":true,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":8000}
+RESULT resolve_config (2 ms): {"org_type":"console","credential_id":"","credential_name":"Anthropic console usage API key","anthropic_base_url":"http://127.0.0.1:8787","allow_custom_base_url":true,"org_id":null,"enterprise_lookback_days":10,"console_lookback_days":3,"console_include_api_usage":true,"dry_run":false,"console_debug":false,"ingest_batch_size":500,"time_budget_ms":8000}
 [console] days: 2026-10-20, 2026-10-19, 2026-10-18
 [console] [anthropic] 429 on /v1/organizations/usage_report/claude_code; backing off 1000 ms (attempt 1/5)
-[console] budget low (1383 ms left): flushing 7 entries
+[console] budget low (1385 ms left): flushing 7 entries
 [console] [ingest] 7/7 events
-[console] budget low (284 ms left): flushing 1 entries
+[console] budget low (285 ms left): flushing 1 entries
 [console] [ingest] 1/1 events
 [console] [anthropic] deadline reached after 0 page(s) of v1/organizations/usage_report/messages (not started)
 [console] [anthropic] deadline reached after 0 page(s) of v1/organizations/usage_report/messages (not started)
@@ -157,15 +157,33 @@ ASSERT_OK   flush reserve: 15 s at 95 s, 3 s at 12 s, 1 s floor
 [team_csv] ingested 8/8 (HTTP 202)
 {"source": "team_csv", "events": 8, "ingested": 8, "date": "2026-10-18", "endpoint": "http://127.0.0.1:8787/api/v2/bizevents/ingest"}
 
+--- [9b] one-command wrapper import-team-csv.sh -> mock sink (token path, --yes, preview + file-date warning; day 2026-10-17 so dedup.keys differ from 9/9) ---
+  [1;34m==>[0m Preview of <ROOT>/csv-import/sample.csv for usage day 2026-10-17 (org.id=org_team_wrap)
+    events (user x product x model): 8   users: 4   requests: 1371   tokens: 42,201,500
+    net spend: US$ 353.94   gross: US$ 407.03
+      claude_code  events=3    requests=1050    tokens=35,927,500   US$ 312.74
+      chat         events=3    requests=265     tokens=3,262,100    US$ 21.11
+      design       events=1    requests=12      tokens=500,400      US$ 10.11
+      cowork       events=1    requests=44      tokens=2,511,500    US$ 9.98
+    models: claude-haiku-5-5, claude-opus-5-5, claude-sonnet-5-5
+    re-importing the same day overwrites earlier rows (dedup.key); nothing is duplicated.
+  [1;34m==>[0m Delivery: bizevents ingest API on http://127.0.0.1:8787 (token)
+  [team_csv] 8 events from <ROOT>/csv-import/sample.csv for 2026-10-17; users=4 net_spend_usd=353.94
+  [team_csv] ingested 8/8 (HTTP 202)
+  {"source": "team_csv", "events": 8, "ingested": 8, "date": "2026-10-17", "endpoint": "http://127.0.0.1:8787/api/v2/bizevents/ingest"}
+  [1;34m==>[0m Done. In Dynatrace: fetch bizevents, from:now()-1h | filter event.type == "claude.usage.daily" and source == "team_csv" | summarize count(), by:{usage.date, org.id}
+ASSERT_OK   wrapper delivered 8 team_csv events via the token path
+ASSERT_OK   wrapper --dry-run exits 0 without credentials
+
 --- dedup.key parity (Python importer vs JS common.js) for (alice@example.com, chat, claude-sonnet-5-5, 2026-10-18, team_csv) ---
 python: 571529e62714dbf864dc32cb4d4fcbcf
 node:   571529e62714dbf864dc32cb4d4fcbcf
 PARITY_OK
 
 --- sink summary ---
-events received: 404
-by source: {"enterprise_api": 356, "console_api": 40, "team_csv": 8}
-by product: {"claude_code": 108, "cowork": 76, "design": 86, "chat": 115, "api": 19}
+events received: 412
+by source: {"enterprise_api": 356, "console_api": 40, "team_csv": 16}
+by product: {"claude_code": 111, "cowork": 77, "design": 87, "chat": 118, "api": 19}
 requests to mock (method, path, status, count):
   GET  200   2  /v1/organizations/analytics/user_cost_report
   GET  429   1  /v1/organizations/analytics/user_cost_report
@@ -175,7 +193,7 @@ requests to mock (method, path, status, count):
   GET  429   1  /v1/organizations/usage_report/claude_code
   GET  200   2  /v1/organizations/usage_report/messages
   GET  429   1  /v1/organizations/usage_report/messages
-  POST 202   3  /api/v2/bizevents/ingest
+  POST 202   4  /api/v2/bizevents/ingest
 
 --- one sample event per source ---
 {
@@ -202,7 +220,7 @@ requests to mock (method, path, status, count):
   "cost.list_usd": 657.147866,
   "cost.currency": "USD",
   "tools.web_search_requests": 15,
-  "data.refreshed_at": "2026-10-19T23:31:01Z",
+  "data.refreshed_at": "2026-10-20T07:20:43Z",
   "user.id": "user_01A"
 }
 {
@@ -268,7 +286,7 @@ requests to mock (method, path, status, count):
 }
 
 --- schema checks over all sink events ---
-events=404 missing_fields=0 bad_event_type=0 bad_dedup_key=0 bad_date=0 bad_product=0 duplicate_keys_in_single_run=0
+events=412 missing_fields=0 bad_event_type=0 bad_dedup_key=0 bad_date=0 bad_product=0 duplicate_keys_in_single_run=0
 api rows (user.email null, api.workspace_id set): 19; api_actor rows (user.email apikey:*): 6
 SCHEMA_OK
 

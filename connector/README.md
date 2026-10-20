@@ -14,11 +14,12 @@ connector/
 │   ├── build.py                      tasks/ + lib/common.js  →  JSON + build/*.js
 │   ├── lib/common.js                 shared: Anthropic client (rate limit, backoff, cursor rules), event builder, ingest batching
 │   └── tasks/                        resolve_config · enterprise_analytics · console_claude_code · team_reminder
-├── csv-import/                    import_team_spend.py (+ sample.csv) for Claude Team plans
+├── csv-import/                    import-team-csv.sh / .ps1 (one command, preview + confirm) over import_team_spend.py (+ ingest_events.js for dtctl, sample.csv) for Claude Team plans
 ├── dql/                           4 ready queries (cost/dev, tokens by product+model, top 10, official vs observed)
 ├── dashboard/                     claude-usage-dashboard.json (dtctl) · .upload.json (Dashboards app) · build.py
 ├── deploy/                        deploy.sh (dtctl, end to end) · vault_upsert.js · render_workflow.py · merge_allowlist.py
 ├── skills/deploy-claude-usage-connector/SKILL.md   Claude skill: deploy + operate with dtctl
+├── skills/import-team-csv/SKILL.md                 Claude skill: run the Team CSV import (preview, confirm, verify)
 └── test/                          mock_server.py (Anthropic + bizevents sink) · run_tests.sh · test.log · Node SDK shims
 ```
 
@@ -40,7 +41,7 @@ imported by hand with Dashboards → Upload or `dtctl apply -f` (see [Dashboard]
 |---|---|---|---|---|---|
 | **Claude Enterprise** (claude.ai, usage-based plan) | `enterprise` | **Analytics API key** (scope `read:analytics`) | claude.ai → Organization settings → API. Only the **primary owner** can enable API access and create it. | `GET /v1/organizations/analytics/user_cost_report` and `user_usage_report` (`bucket_width=1d`, `group_by[]=product,model`, `limit=1000`) | yes — chat, claude_code, cowork, design, … |
 | **Claude Console / Claude Platform** (API orgs) | `console` | **Admin API key** `sk-ant-admin01-…` | platform.claude.com/settings/admin-keys (organization admin) | `GET /v1/organizations/usage_report/claude_code` (per user/API key, per day) and optionally `usage_report/messages` grouped by model + workspace (org-level, `product=api`) | yes for Claude Code; API usage is org/workspace level |
-| **Claude Team** | `team` | none | claude.ai → Settings → Analytics → **export spend CSV** (≤ 90 days, daily refresh, 1-day lag) | none — run `csv-import/import_team_spend.py` | yes (from the CSV) |
+| **Claude Team** | `team` | none | claude.ai → Settings → Analytics → **export spend CSV** (≤ 90 days, daily refresh, 1-day lag) | none — run `csv-import/import-team-csv.sh <file>` (Team admin, one command) | yes (from the CSV) |
 
 The two key types are not interchangeable: an Admin key cannot call the Enterprise Analytics API and vice-versa.
 Seat-based Enterprise plans get usage credits only in the cost endpoints, not dollars.
@@ -111,10 +112,24 @@ With an OAuth dtctl context the vault step needs the `environment-api:credential
 Token credential in the UI instead and pass `CREDENTIAL_ID=… --skip-vault`. `deploy/deploy_all.sh` runs the three org types in one go.
 
 ### 4. Team plan: CSV importer
+The only manual step is the export (claude.ai → Settings → Analytics → export spend CSV, refreshed daily, 1-day lag). Everything after
+it is one command, meant for the Team admin, not for developers:
+```bash
+csv-import/import-team-csv.sh ~/Downloads/spend-export.csv            # Windows: csv-import\import-team-csv.ps1 .\spend-export.csv
+```
+What it does so the usual mistakes cannot happen: usage day defaults to **yesterday (UTC)** (the day the export covers; `--date` overrides,
+a warning appears when the file is older than that); the tenant comes from the layer 1/2 install when present; delivery is **dtctl with
+your own login when dtctl is installed** (`dtctl exec function`, no token at all; `--context <name>` to pick one), otherwise an ingest
+token with `bizevents.ingest` from `DT_BIZEVENTS_TOKEN`, the OS credential store (`--save-token` stores the one you type once) or a hidden
+prompt; a **preview** (events, users, net/gross USD, per product, models, file-date check) and a `[y/N]` confirmation come before anything
+is sent (`--dry-run` stops there, `--yes` skips the question); the same day re-imported overwrites through `dedup.key`. Claude can run it
+for you: skill `skills/import-team-csv/SKILL.md`.
+
+The wrapper calls the plain importer, which you can still use directly (CI, other tenants, OpenPipeline endpoints):
 ```bash
 export DT_INGEST_TOKEN=dt0c01....   # scope bizevents.ingest
 python3 csv-import/import_team_spend.py --csv spend-export.csv --date 2026-10-18 --tenant https://abc12345.live.dynatrace.com --org-id acme
-# --dry-run prints the payload instead of sending; --endpoint /platform/ingest/custom/events/<name> for an OpenPipeline endpoint
+# --preview prints a JSON summary; --dry-run prints the events; --endpoint /platform/ingest/custom/events/<name> for an OpenPipeline endpoint
 ```
 Columns mapped: `user email`→`user.email`, `account UUID`→`user.id`, `product`, `model`, `model family`, `total_requests`→`requests`,
 `total_prompt_tokens`→`tokens.input`, `total_completion_tokens`→`tokens.output`, `total_net_spend_usd`→`cost_usd`,

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- docs: unified chat also validated from the Claude Desktop app (conversation with an attached folder: every prompt and model call exported, including the session-title call on claude-haiku-5-5).
 - docs: the *Chat and Cowork unified* toggle lives under Organization settings → **Capabilities (Recursos) → Chat** (path corrected); two pt-BR admin screenshots added (Monitoring, unified toggle), tenant host and org masked.
 - docs: chat-mode matrix (unified on/off × Cowork/chat), recommendation and customer caveats for *Chat and Cowork unified*, and six redacted screenshots (`docs/images/cowork/`) in README, GUIDE and the validation runbook; note that the dashboard's Cowork section fills from these events.
 - docs: Cowork export also validated for tasks started in the Claude Desktop app (2.42304.2) with a local folder: on a Team org they run as cloud sessions with the folder shared and arrive as `cowork.surface = remote`; runbook troubleshooting for "local" tests that never ran.

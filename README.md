@@ -327,7 +327,7 @@ fetch logs, from:now()-24h
 | Org setting *Chat and Cowork unified* | Cowork (web and Desktop) | Chat (web and Desktop) |
 |---|---|---|
 | **Off** — classic Chat \| Cowork selector | ✅ exported (validated from the Desktop app with a local folder) | ❌ not exported |
-| **On** (beta) — one Home, no separate Cowork | ✅ exported (validated from claude.ai web) | ✅ exported as `service.name = cowork` (validated from claude.ai web; Desktop chat expected to behave the same) |
+| **On** (beta) — one Home, no separate Cowork | ✅ exported (validated from claude.ai web) | ✅ exported as `service.name = cowork` (validated from claude.ai web and from the Desktop app; in both tests the conversation used the cloud workspace — code execution or an attached folder — so a plain Q&A with no workspace was not isolated) |
 
 **Recommendation:** to see *everything* (Claude Code + Cowork + chat) per developer, turn **Chat and Cowork unified** on (Organization settings → Capabilities → Chat). Before doing it at a customer, flag that it is beta, that users lose the Chat/Cowork selector and their conversations run on Anthropic's cloud, and that their security team may need to review code execution and file access in the cloud (Anthropic links a security guide from the toggle). Leave *Early access: Run Cowork in the cloud* as it is; it is a separate setting and was off during the validation.
 

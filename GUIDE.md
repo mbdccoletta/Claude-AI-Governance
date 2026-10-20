@@ -308,7 +308,7 @@ fetch logs, from:now()-24h
 | Configuração da org *Chat and Cowork unified* | Cowork (web e Desktop) | Chat (web e Desktop) |
 |---|---|---|
 | **Desligado** — seletor clássico Chat \| Cowork | ✅ exporta (validado pelo app Desktop com pasta local) | ❌ não exporta |
-| **Ligado** (beta) — uma Home só, sem Cowork separado | ✅ exporta (validado pelo claude.ai web) | ✅ exporta como `service.name = cowork` (validado pelo claude.ai web; o chat do Desktop deve se comportar igual) |
+| **Ligado** (beta) — uma Home só, sem Cowork separado | ✅ exporta (validado pelo claude.ai web) | ✅ exporta como `service.name = cowork` (validado pelo claude.ai web e pelo app Desktop; nos dois testes a conversa usou o espaço de trabalho na nuvem — execução de código ou pasta anexada —, então uma pergunta simples sem espaço de trabalho não foi isolada) |
 
 **Recomendação:** para ver *tudo* (Claude Code + Cowork + chat) por desenvolvedor, ligue o **Chat and Cowork unified** (Organization settings → Recursos (Capabilities) → Chat). Antes de fazer isso num cliente, avise que é beta, que os usuários perdem o seletor Chat/Cowork e as conversas passam a rodar na nuvem da Anthropic, e que o time de segurança pode precisar revisar execução de código e acesso a arquivos na nuvem (a Anthropic linka um guia de segurança no próprio toggle). Deixe *Acesso antecipado: Execute o Cowork na nuvem* como está; é outra configuração e ficou desligada durante a validação.
 

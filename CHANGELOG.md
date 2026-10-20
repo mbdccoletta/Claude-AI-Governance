@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- docs: new "Recommended setup, coverage status and sources of truth" section (README and GUIDE): the configuration that covers every scenario, one source of truth per question with no-double-counting rules, validated vs documented vs impossible surfaces, options to capture plain chat (Enterprise Analytics API, Desktop 3P mode, Claude apps gateway), and Claude Code on the web / Claude in Slack.
 - fix(hook): when no turn start was recorded for a session (hook installed mid-session, or state lost), the Stop span now counts only the turn after the last human prompt in the transcript instead of the whole session history; with no prompt found it reports no token counts. Found on a live install: the first span after installing mid-session reported 313 M input tokens. Two regression tests added to `test/hook_tests.py`.
 - docs: classic chat file creation ("Created a file") without a move to the cloud workspace is not exported either; whether a conversation moves is Claude's decision (web test, 2026-10-20).
 - docs: with *Chat and Cowork unified* on, only conversations that move to the cloud workspace (code, files, longer tasks) are exported; a plain Q&A stays a classic chat and is not exported (tested 2026-10-20). Matrix, recommendation and runbook corrected.

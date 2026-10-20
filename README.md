@@ -122,7 +122,7 @@ Claude Code native OTel ────────┘        │  (metrics + logs,
 
 | | |
 |---|---|
-| 🧱 [Three layers](#three-layers) · [What is measured where](#what-is-measured-where) | 🗝️ [Anthropic plans vs APIs](#plans-vs-apis) · [Credentials you need](#credentials) |
+| 🧱 [Three layers](#three-layers) · [What is measured where](#what-is-measured-where) · ✅ [Recommended setup](#recommended-setup) | 🗝️ [Anthropic plans vs APIs](#plans-vs-apis) · [Credentials you need](#credentials) |
 | 🔧 [Prerequisites](#prerequisites) | 📦 [Installation](#installation) |
 | ✅ [Verify it's working](#verify) | 🏷️ [Custom attributes](#custom-attributes) |
 | 📡 [Claude Code native telemetry (optional)](#native-telemetry) · 🤝 [Cowork telemetry](#cowork-telemetry) | 🔢 [Understanding token counts](#token-counts) |
@@ -287,6 +287,50 @@ Notes:
 ---
 
 <a id="evals"></a>
+<a id="recommended-setup"></a>
+## ✅ Recommended setup, coverage status and sources of truth (2026-10-20)
+
+**Setup that covers every scenario without double counting**
+
+| Where | What to turn on |
+|---|---|
+| claude.ai org (Team or Enterprise) | Cowork **Monitoring** pointed straight at Dynatrace ([Cowork telemetry](#cowork-telemetry)); **Chat and Cowork unified** on (Capabilities → Chat) |
+| Each developer machine | this asset with native OTel (`./install.sh --enable-native-otel`). VS Code / Cursor users install **either** the VS Code extension **or** this asset, never both |
+| Dynatrace | both dashboards; layer 3 with the Team CSV importer (Team) or the Analytics API workflow (Enterprise usage-based) |
+
+**One source of truth per question**
+
+| Question | Source | Why it does not double count |
+|---|---|---|
+| Tokens and cost per user, real time | logs `event.name == "api_request"` for `service.name` in `claude-code`, `claude-code-desktop`, `cowork` | one event per model call, same schema for Claude Code, Cowork and unified chat |
+| What happened in a conversation (tools, duration, prompts) | hook spans (`chat …`, `claude.tool.*`) | use for behaviour only — never add span tokens to log tokens, they are the same tokens |
+| What was actually billed | layer 3 (Team CSV / Enterprise Analytics API) | official and daily — compare with real time, never add |
+
+Rules: hook spans and native OTel measure the same Claude Code usage (totals come from the logs); one installation per machine (the extension and this asset write the same hook, last writer wins); unified chat already arrives as `cowork`; the Team CSV is only the billed overage, a slice of the same usage; Cowork runs in an isolated VM and never goes through the hook.
+
+**Coverage status**
+
+| Status | Surfaces |
+|---|---|
+| ✅ Validated end to end on a tenant | Claude Code in the Desktop Code tab and the CLI (hook spans + native `api_request`); Claude Code in VS Code / Cursor (VS Code asset); Cowork from claude.ai web and from the Desktop app; unified chat that uses the cloud workspace (code, files); both dashboards with real data |
+| 📄 Documented by Anthropic, not yet validated here | Team spend CSV with a real export; Enterprise Analytics API with real data (mock-tested); Office Agents OTel (configured, no traffic yet); Claude Desktop in third-party (3P) mode; Claude Code on the web and Claude in Slack (see below) |
+| ❌ No telemetry exists | plain chat Q&A (web and Desktop, any mode) — only the Team CSV overage or the Enterprise Analytics API (daily); Claude Design and Claude in Chrome — only Analytics API or CSV |
+
+Caveats: OTel cost is an estimate at API list price, not the invoice; on Team and seat-based Enterprise, usage inside the seat allotment has no per-token cost (it is the flat seat fee); prompts and responses are off by default everywhere.
+
+**Options to also capture plain chat (documented, not validated)**
+
+- **Claude Enterprise, usage-based** — the Analytics API returns chat tokens and cost per user per day; this asset's layer 3 already imports it.
+- **Claude Desktop in third-party (3P) mode** — the Desktop routes all inference to a provider you choose (Claude API, Bedrock, Vertex, Foundry or a gateway) and, with `otlpEndpoint` (+ `otlpHeadersHelper` for the token), exports logs and metrics for **Chat, Cowork and Code** sessions with token counts and `enduser.id`. Trade-offs: billing moves from seats to per token, claude.ai web is not covered (Desktop only), conversations stay on the device, features ship later. Single-machine test: Help → Troubleshooting → Enable Developer Mode → Developer → Configure Third-Party Inference. Sources: [3P overview](https://claude.com/docs/third-party/claude-desktop/overview), [3P telemetry](https://claude.com/docs/third-party/claude-desktop/telemetry).
+- **Claude apps gateway** — a self-hosted gateway in front of Claude Code and the 3P Desktop that meters spend per developer, enforces limits and relays OTel with `user.email` and IdP groups (`telemetry.forward_to`). Source: [gateway configuration](https://code.claude.com/docs/en/claude-apps-gateway-config).
+
+**Other surfaces (documented, not validated)**
+
+- **Claude Code on the web** — set the `CLAUDE_CODE_ENABLE_TELEMETRY` / `OTEL_*` keys in the org's **server-managed settings** (central, no per-machine install; put the collector credential there, not in environment variables).
+- **Claude in Slack (Claude Tag)** — does not receive server-managed settings; set the variables on the org's shared cloud environment and allow the collector host in its network allowlist; sessions carry `app.entrypoint = claude-in-slack` with `OTEL_METRICS_INCLUDE_ENTRYPOINT=true`. Source: [Monitoring](https://code.claude.com/docs/en/monitoring-usage).
+
+---
+
 <a id="cowork-telemetry"></a>
 ## 🤝 Cowork telemetry (Team and Enterprise, no install on the machine)
 

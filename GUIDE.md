@@ -268,6 +268,50 @@ Detalhes: o `service.name` nativo é definido pelo Claude Code (`claude-code-des
 
 ---
 
+<a id="configuracao-recomendada"></a>
+## Configuração recomendada, status de cobertura e fontes da verdade (2026-10-20)
+
+**Configuração que cobre todos os cenários sem contar em dobro**
+
+| Onde | O que ligar |
+|---|---|
+| Org no claude.ai (Team ou Enterprise) | **Monitoramento** do Cowork direto para o Dynatrace ([Telemetria do Cowork](#telemetria-do-cowork)); **Chat e Cowork unificados** ligado (Recursos → Chat) |
+| Máquina de cada dev | este asset com OTel nativo (`./install.sh --enable-native-otel`). Quem usa VS Code / Cursor instala **ou** a extensão do VS Code **ou** este asset, nunca os dois |
+| Dynatrace | os dois dashboards; camada 3 com o importador do CSV (Team) ou o workflow da Analytics API (Enterprise por uso) |
+
+**Uma fonte da verdade por pergunta**
+
+| Pergunta | Fonte | Por que não duplica |
+|---|---|---|
+| Tokens e custo por usuário, em tempo real | logs `event.name == "api_request"` com `service.name` em `claude-code`, `claude-code-desktop`, `cowork` | um evento por chamada ao modelo, mesmo esquema para Claude Code, Cowork e chat unificado |
+| O que aconteceu na conversa (ferramentas, duração, prompts) | spans do hook (`chat …`, `claude.tool.*`) | usar só para comportamento — nunca somar tokens dos spans com os dos logs, são os mesmos tokens |
+| O que foi cobrado de fato | camada 3 (CSV do Team / Analytics API do Enterprise) | oficial e diário — comparar com o tempo real, nunca somar |
+
+Regras: spans do hook e OTel nativo medem o mesmo uso do Claude Code (o total vem dos logs); uma instalação por máquina (extensão e asset gravam o mesmo hook, o último sobrescreve); o chat unificado já chega como `cowork`; o CSV do Team é só o excedente cobrado, um recorte do mesmo uso; o Cowork roda numa VM isolada e nunca passa pelo hook.
+
+**Status de cobertura**
+
+| Status | Superfícies |
+|---|---|
+| ✅ Validado de ponta a ponta num tenant | Claude Code na aba Code do Desktop e no CLI (spans do hook + `api_request` nativo); Claude Code no VS Code / Cursor (asset VS Code); Cowork pelo claude.ai web e pelo app Desktop; chat unificado que usa o espaço de trabalho na nuvem (código, arquivos); os dois dashboards com dados reais |
+| 📄 Documentado pela Anthropic, ainda não validado aqui | CSV de gastos do Team com exportação real; Analytics API do Enterprise com dados reais (testada com mock); OTel do Office Agents (configurado, sem tráfego); Claude Desktop em modo terceiros (3P); Claude Code na web e Claude no Slack (abaixo) |
+| ❌ Não existe telemetria | chat simples de pergunta e resposta (web e Desktop, qualquer modo) — só o excedente no CSV do Team ou a Analytics API do Enterprise (diária); Claude Design e Claude in Chrome — só Analytics API ou CSV |
+
+Ressalvas: o custo do OTel é estimativa a preço de lista da API, não a fatura; no Team e no Enterprise por assento, o uso dentro da cota do assento não tem custo por token (é a mensalidade fixa); prompts e respostas ficam desligados por padrão em todas as fontes.
+
+**Opções para pegar também o chat simples (documentadas, não validadas)**
+
+- **Claude Enterprise por uso** — a Analytics API traz tokens e custo do chat por usuário por dia; a camada 3 deste asset já importa.
+- **Claude Desktop em modo terceiros (3P)** — o Desktop envia toda a inferência para um provedor escolhido (Claude API, Bedrock, Vertex, Foundry ou um gateway) e, com `otlpEndpoint` (+ `otlpHeadersHelper` para o token), exporta logs e métricas das sessões de **Chat, Cowork e Code** com contagem de tokens e `enduser.id`. Contrapartidas: a cobrança passa de assento para token, o claude.ai web fica de fora (só Desktop), as conversas ficam no dispositivo, as novidades chegam depois. Teste em uma máquina: Help → Troubleshooting → Enable Developer Mode → Developer → Configure Third-Party Inference. Fontes: [visão geral 3P](https://claude.com/docs/third-party/claude-desktop/overview), [telemetria 3P](https://claude.com/docs/third-party/claude-desktop/telemetry).
+- **Claude apps gateway** — gateway hospedado pela empresa na frente do Claude Code e do Desktop 3P, que mede gasto por desenvolvedor, aplica limites e repassa o OTel com `user.email` e grupos do IdP (`telemetry.forward_to`). Fonte: [configuração do gateway](https://code.claude.com/docs/en/claude-apps-gateway-config).
+
+**Outras superfícies (documentadas, não validadas)**
+
+- **Claude Code na web** — definir as chaves `CLAUDE_CODE_ENABLE_TELEMETRY` / `OTEL_*` nas **server-managed settings** da org (central, sem instalar nada por máquina; a credencial do collector vai ali, não em variáveis de ambiente).
+- **Claude no Slack (Claude Tag)** — não recebe server-managed settings; definir as variáveis no ambiente de nuvem compartilhado da org e liberar o host do collector na allowlist de rede; as sessões trazem `app.entrypoint = claude-in-slack` com `OTEL_METRICS_INCLUDE_ENTRYPOINT=true`. Fonte: [Monitoring](https://code.claude.com/docs/en/monitoring-usage).
+
+---
+
 <a id="telemetria-do-cowork"></a>
 ## Telemetria do Cowork (Team e Enterprise, sem instalar nada na máquina)
 

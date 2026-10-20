@@ -90,6 +90,7 @@ $env:DT_INGEST_TOKEN = 'dt0c01.XXXX'
 |---|---|---|
 | `--capture-prompts` | `-CapturePrompts` | Envia o conteúdo de prompts e respostas (desligado por padrão) |
 | `--enable-native-otel` | `-EnableNativeOtel` | Liga as métricas/logs nativos do Claude Code via bloco `env` no `settings.json` do usuário |
+| `--enable-evals` | `-EnableEvals` | Confere Node.js ≥ 20 e imprime como rodar o Dynatrace Evals sobre os prompts capturados; não executa nada |
 | `--attr chave=valor` | `-Attr chave=valor` | Atributos customizados adicionais |
 | `--collector-port`, `--health-port` | `-CollectorPort`, `-HealthPort` | Portas (padrão 4318 / 13133; se ocupadas, a próxima livre é usada) |
 | `--otelcol-version`, `--otelcol-tarball` | `-OtelcolVersion`, `-OtelcolTarball` | Fixar a versão do coletor / instalar a partir de um tarball local (ambiente sem internet) |
@@ -189,6 +190,64 @@ Detalhes: o `service.name` nativo é definido pelo Claude Code (`claude-code-des
 
 ---
 
+## Dynatrace Evals (opcional)
+
+O [dt-evals](https://github.com/dynatrace-oss/dt-evals) (`@dynatrace-oss/dt-evals`, open source, alpha) pega spans `gen_ai.*` de produção, pede a um LLM "juiz" que avalie cada interação e grava o veredito de volta na tenant como bizevents. Os spans deste asset servem direto: cada turno do Claude Code é um span `gen_ai.operation.name == "chat"` com `gen_ai.prompt.0.content` / `gen_ai.completion.0.content` **quando a captura de prompts está ligada**. O script [evals/run-evals.sh](evals/run-evals.sh) (`evals\run-evals.ps1` no Windows) faz o papel dos comandos *Configurar Evals* / *Rodar Evals* da extensão VS Code: mesma lista de evaluators, mesmas opções de janela (`--since`) e amostragem (`--sample`), configuração gerada para o formato dos spans deste asset e confirmação `y/N` antes de qualquer coisa que custe dinheiro. Nada roda sozinho; o instalador só imprime os passos (`--enable-evals`).
+
+**O que é avaliado** — 15 métricas built-in, uma nota (0–1), um rótulo `pass`/`fail` e uma explicação por turno amostrado:
+
+| Grupo | Evaluators | Lê |
+|---|---|---|
+| Segurança (padrão) | `prompt-injection`, `pii-leakage` | prompt; prompt + resposta |
+| Segurança (mais) | `output-prompt-injection`, `toxicity`, `bias` | resposta |
+| Fundamentação | `hallucination`, `faithfulness`, `factual-accuracy` | prompt + resposta |
+| Qualidade | `relevance`, `answer-completeness`, `conciseness`, `fluency`, `summarization-quality`, `context-relevance` | prompt + resposta |
+| Experiência | `user-frustration` | prompt |
+
+O par padrão responde às duas perguntas que um time de plataforma realmente tem sobre assistentes de código: *alguém está mandando payload de prompt injection para o Claude Code (issue colada, README, saída de ferramenta) e há dado pessoal nos prompts ou respostas?* As métricas de fundamentação e qualidade foram pensadas para RAG e chat; funcionam em turnos de código (`--metrics all`), mas leia as notas com esse contexto.
+
+**Pré-requisitos**
+
+- Captura de prompts **ligada** (`install.sh --capture-prompts`). Sem isso o script se recusa a rodar: os spans não têm texto. O hook corta cada atributo em 4 096 caracteres, então o juiz vê os primeiros 4 KB de cada prompt e de cada resposta.
+- Node.js ≥ 20 (o CLI roda via `npx`, nada é instalado globalmente).
+- Um **platform token** (`dt0s16…`) com `storage:spans:read`, `storage:buckets:read`, `storage:bizevents:read`, `openpipeline:bizevents:ingest` (`storage:events:write` se a URL for `*.apps.dynatrace.com`) e `storage:logs:read` (usado pelo `validate`); `storage:metrics:write` é opcional. `run-evals.sh doctor` guia a criação em `myaccount.dynatrace.com` e guarda o token como `DT_API_TOKEN` em `evals/.env` (ignorado pelo git). Um API token clássico (`dt0c01…`) com escopos equivalentes também funciona. O usuário do token precisa ler o bucket `default_spans`.
+- A chave do provedor juiz: `ANTHROPIC_API_KEY` (padrão; modelo `claude-sonnet-4-6` salvo `--model`) ou `OPENAI_API_KEY` com `--provider openai`. Azure OpenAI, Gemini, Vertex e Bedrock também são aceitos.
+
+**Custo e dados**
+
+- Cada execução real chama o juiz uma vez por turno amostrado **por evaluator**: `turnos na janela × --sample % × evaluators`. Cada chamada manda até ~8 KB de prompt/resposta mais o prompt do evaluator para a **sua** conta no provedor de LLM. Com os padrões (última hora, 10 %, dois evaluators) um dia de uso custa centavos; `--metrics all --sample 100 --since 24h` numa frota, não.
+- O dt-evals mascara e-mails, telefones, cartões e SSN em memória antes de chamar o juiz. O resto dos 4 KB vai como está. Esse é o único caminho em que texto de prompt capturado sai da tenant: é o mesmo texto que o coletor já envia ao Dynatrace quando a captura está ligada.
+- Os resultados ficam na **mesma tenant** de onde vieram os spans; o texto avaliado **não** é copiado para os bizevents de resultado, a menos que se passe `--store-evaluated-prompt`.
+- Comece com `preview` (busca os spans amostrados, não chama o juiz, não grava nada) para ver quantos turnos entram, mantenha a amostra e os evaluators padrão na primeira execução e só então aumente.
+
+**Comandos**
+
+```bash
+evals/run-evals.sh plan                                  # config gerada + comando exato; sem rede
+evals/run-evals.sh doctor                                # checa dtctl e guia o platform token → evals/.env
+export ANTHROPIC_API_KEY=...                             # ou OPENAI_API_KEY e --provider openai
+evals/run-evals.sh validate                              # schema, conectividade com a tenant, juiz alcançável
+evals/run-evals.sh preview --since 6h --sample 25        # o que seria julgado; só lê spans
+evals/run-evals.sh run --since 6h --sample 25 --metrics prompt-injection,pii-leakage,toxicity   # pergunta y/N e roda
+evals/run-evals.sh runs                                  # histórico local (~/.dt-eval/runs.json)
+```
+
+Opções: `--since 30m|1h|6h|24h` (padrão `1h`), `--sample 10|25|50|100` (padrão `10`), `--metrics a,b,c|all` (padrão `prompt-injection,pii-leakage`; vários rodam numa passada via config gerada), `--provider`/`--model`, `--service claude-code|claude-code-desktop|both`, `--env-url` (padrão: derivada de `~/.dt-ai-obs/config.env`), `--store-evaluated-prompt`, `--config` (usar um `.dt-eval.yaml` próprio), `--dry-run`, `--yes`. A config gerada (`evals/.dt-eval.yaml`, sem segredos) restringe o escopo a `operationNames: [chat]`, `service.name` em `{claude-code, claude-code-desktop}` e mapeia `spanFields` para `gen_ai.prompt.0.content` / `gen_ai.completion.0.content`.
+
+**Lendo os resultados** — bizevents com `event.type == "gen_ai.evaluation.result"`, um por turno × evaluator: `gen_ai.evaluation.name`, `gen_ai.evaluation.score.value` (0–1), `gen_ai.evaluation.score.label` (`pass`/`fail`), `gen_ai.evaluation.explanation`, `dt.eval.run_id`, `trace_id`/`span_id` (o turno do Claude Code), `gen_ai.request.model` (modelo **juiz**), `gen_ai.evaluation.input.request_model` (modelo Claude que respondeu).
+
+```dql
+fetch bizevents, from:now()-7d
+| filter event.type == "gen_ai.evaluation.result"
+| summarize turnos = countDistinct(trace_id), nota_media = avg(gen_ai.evaluation.score.value),
+            falhas = countIf(gen_ai.evaluation.score.label == "fail"), by: { gen_ai.evaluation.name }
+| sort falhas desc
+```
+
+Para ver por desenvolvedor/squad, faça join com os spans do hook por `trace_id` (query pronta em [docs/dql-examples.md](docs/dql-examples.md#evaluation-results-dt-evals-optional)). Sugestão de tiles no *Developers AI Usage* depois da primeira execução: *single value* de falhas de `pii-leakage` em 7 d (verde 0, amarelo ≥ 1, vermelho ≥ 5), *barras* de vereditos por evaluator e *tabela* das últimas 20 falhas com desenvolvedor, squad e explicação. O JSON do dashboard não foi alterado.
+
+---
+
 ## Atributos customizados
 
 `--squad`, `--cost-center` e `--attr chave=valor` viram atributos de recurso em todos os sinais (via coletor) e atributos de span nos spans do hook (via `otel-attrs.json`). Chaves começando com `_` são reservadas (`_capture_prompts`, `_collector_port`). Para alterar, rode o instalador de novo com os novos valores.
@@ -204,7 +263,7 @@ Detalhes: o `service.name` nativo é definido pelo Claude Code (`claude-code-des
 | `Exporting failed` / 401 / 403 no log | Escopos do token ou host `.apps.` | Reinstale com token correto e endpoint `.live.` |
 | 400 em `/v1/metrics` | Temporalidade cumulativa | Garanta `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta` (managed settings vencem as do usuário) |
 | Spans chegam, métricas/logs não | Telemetria nativa desligada ou sessão antiga | `python3 hooks/configure-hooks.py status`; reinicie o Claude Code |
-| Spans **e** métricas chegam, o `collector.log` mostra lotes `Logs` com HTTP 200 e sem `partialSuccess`, mas `fetch logs` não acha nada (nem por `session.id` ou `content`) | **Permissão de leitura no Grail**, não ingestão: os logs OTLP entram pelo pipeline `logs:default` no bucket `default_logs`. Se a política IAM do usuário que consulta não tem `storage:buckets:read` nesse bucket, os registros são gravados mas ficam invisíveis para ele — a ingestão responde sucesso e nada na UI explica. (O formato do registro está correto: variantes de body, `event.name`, timestamp e número de atributos foram testadas) | 1. `fetch dt.system.buckets \| filter dt.system.table == "logs"` — a coluna *has access* de `default_logs` tem de ser `true`. 2. `fetch logs, from:now()-2h \| summarize count(), by:{dt.system.bucket, dt.openpipeline.pipelines}` mostra onde estão os logs que você consegue ler. 3. No tenant: peça ao admin para incluir `default_logs` na sua política (`ALLOW storage:buckets:read WHERE storage:bucket-name = "default_logs";`) **ou** crie em OpenPipeline → Logs uma regra de roteamento `matchesValue(service.name, "claude-code*")` para um pipeline cujo estágio de storage grava num bucket legível (ex.: `claude_code_logs`). Reverifique com [docs/dql-examples.md](docs/dql-examples.md#native-logs-health-check) |
+| Spans **e** métricas chegam, o `collector.log` mostra lotes `Logs` com HTTP 200 e sem `partialSuccess`, mas `fetch logs` não acha nada (nem por `session.id` ou `content`) | **Permissão de leitura no Grail**, não ingestão: os logs OTLP entram pelo pipeline `logs:default` no bucket `default_logs`. Se a política IAM do usuário que consulta não tem `storage:buckets:read` nesse bucket, os registros são gravados mas ficam invisíveis para ele — a ingestão responde sucesso e nada na UI explica. (O formato do registro está correto: variantes de body, `event.name`, timestamp e número de atributos foram testadas) | 1. `fetch dt.system.buckets \| filter dt.system.table == "logs"` — a coluna *has access* de `default_logs` tem de ser `true`. 2. `fetch logs, from:now()-2h \| summarize count(), by:{dt.system.bucket, dt.openpipeline.pipelines}` mostra onde estão os logs que você consegue ler. 3. No tenant: em Account Management → Identity & access → Groups → seu grupo → Permissions, adicione a política built-in **Read Logs** (ou uma custom `ALLOW storage:buckets:read WHERE storage:bucket-name = "default_logs";`) com escopo no ambiente e sem boundary. Se *has access* continuar `false` mesmo assim, procure uma instrução **`DENY storage:buckets:read WHERE storage:bucket-name = "default_logs"`** em alguma política ligada a um dos grupos do usuário (ex.: grupo de "acesso restrito a logs"): um DENY vence qualquer ALLOW, e a única correção é tirar o usuário desse grupo ou remover a instrução. **Ou** crie em OpenPipeline → Logs uma regra de roteamento `matchesValue(service.name, "claude-code*")` para um pipeline cujo estágio de storage grava num bucket legível (ex.: `claude_code_logs`). Reverifique com [docs/dql-examples.md](docs/dql-examples.md#native-logs-health-check) |
 | Nenhum span | Python ausente ou sessões abertas antes da instalação | `python3 --version`; reinicie o Claude Code; teste `echo '{"hook_event_name":"Stop","session_id":"x"}' \| python3 ~/.claude/otel-hook.py; echo $?` (deve ser 0) |
 | `user.email` vazio | Instalado sem `--email` | Reinstale com `--email` |
 | Linux: `secret-tool` funciona no terminal mas o serviço não lê o token | Sem sessão D-Bus para o `systemd --user` | Reinstale numa sessão gráfica ou use o fallback de arquivo 0600 |
@@ -249,6 +308,9 @@ dt-ai-observability-claude/
 │   ├── run-collector.sh / .ps1        wrapper do serviço (lê o token do cofre)
 │   ├── com.dynatrace.dt-ai-obs-claude.plist
 │   └── dt-ai-obs-claude.service
+├── evals/
+│   ├── run-evals.sh / .ps1            Dynatrace Evals (dt-evals) sobre os spans capturados
+│   └── .dt-eval.yaml / .env           gerados pelo script (ignorados pelo git; .env guarda os tokens)
 ├── managed-settings.example.json      telemetria nativa do Claude Code para a frota
 ├── Dashboard/Developers AI Usage.json dashboard (idêntico ao do asset VS Code)
 ├── docs/dql-examples.md

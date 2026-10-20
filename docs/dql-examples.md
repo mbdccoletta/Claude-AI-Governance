@@ -211,12 +211,92 @@ fetch logs, from:now()-1h
 
 If step 1 says `false`, fix it on the tenant side (one of):
 
-- IAM: add the bucket to the policy of the group that queries it —
-  `ALLOW storage:buckets:read WHERE storage:bucket-name = "default_logs";`
-  (plus the usual `storage:logs:read`).
+- IAM (Account Management → Identity & access → Groups → *group* → Permissions): add the
+  built-in policy **Read Logs** scoped to the environment with no boundary, or a custom
+  `ALLOW storage:buckets:read WHERE storage:bucket-name = "default_logs";` plus
+  `storage:logs:read`. If access stays `false` after that, one of the user's groups carries a
+  policy with `DENY storage:buckets:read WHERE storage:bucket-name = "default_logs"` — a DENY
+  beats every ALLOW, so remove the user from that group (User management → Edit user) or
+  drop the statement. Re-run the bucket query afterwards; the change shows within minutes.
 - OpenPipeline → Logs → Routing: rule `matchesValue(service.name, "claude-code*")` to a
   pipeline whose storage stage writes to a bucket those users can read (for example a
   dedicated `claude_code_logs` bucket). Logs then show `dt.system.bucket = "claude_code_logs"`.
 
 Nothing in the collector needs to change: body, `event.name`, timestamp, severity and
 attribute-count variants were all accepted and stored identically.
+
+## Evaluation results (dt-evals, optional)
+
+Written by `evals/run-evals.sh` (the `@dynatrace-oss/dt-evals` CLI) as bizevents with
+`event.type == "gen_ai.evaluation.result"`: one event per evaluated Claude Code turn and
+evaluator. `trace_id` / `span_id` point at the hook's `chat` span, `gen_ai.request.model` is the
+**judge** model and `gen_ai.evaluation.input.request_model` the Claude model that answered.
+Drift results (`--metric drift`) use the same event type with `gen_ai.evaluation.type == "drift"`.
+
+### Score and fail count per evaluator
+
+```dql
+fetch bizevents, from:now()-7d
+| filter event.type == "gen_ai.evaluation.result"
+| summarize turns = countDistinct(trace_id), avg_score = avg(gen_ai.evaluation.score.value),
+            fails = countIf(gen_ai.evaluation.score.label == "fail"), by: { gen_ai.evaluation.name }
+| fieldsAdd fail_pct = if(turns > 0, 100.0 * fails / turns, else: 0)
+| sort fails desc
+```
+
+### Runs (what each `run-evals.sh run` produced)
+
+```dql
+fetch bizevents, from:now()-30d
+| filter event.type == "gen_ai.evaluation.result"
+| summarize started = min(timestamp), evaluators = countDistinct(gen_ai.evaluation.name),
+            turns = countDistinct(trace_id), events = count(),
+            fails = countIf(gen_ai.evaluation.score.label == "fail"),
+            judge = takeFirst(gen_ai.request.model), by: { dt.eval.run_id }
+| sort started desc
+```
+
+### Latest fails with the judge's explanation
+
+```dql
+fetch bizevents, from:now()-7d
+| filter event.type == "gen_ai.evaluation.result" and gen_ai.evaluation.score.label == "fail"
+| fields timestamp, gen_ai.evaluation.name, score = gen_ai.evaluation.score.value,
+         gen_ai.evaluation.explanation, model = gen_ai.evaluation.input.request_model, trace_id, span_id
+| sort timestamp desc
+| limit 20
+```
+
+### Fails per developer, squad and client (join with the hook spans)
+
+The result events carry no `user.email`; the hook span of the same trace does.
+
+```dql
+fetch bizevents, from:now()-7d
+| filter event.type == "gen_ai.evaluation.result" and gen_ai.evaluation.score.label == "fail"
+| join [
+    fetch spans, from:now()-7d
+    | filter gen_ai.operation.name == "chat" and in(service.name, {"claude-code", "claude-code-desktop"})
+    | fieldsAdd trace_id = toString(trace.id)
+    | summarize Developer = takeFirst(`user.email`), Squad = takeFirst(squad), Client = takeFirst(service.name), by: { trace_id }
+  ], on: { trace_id }, fields: { Developer, Squad, Client }
+| summarize fails = count(), by: { Developer, Squad, Client, gen_ai.evaluation.name }
+| sort fails desc
+```
+
+### Coverage: how many captured turns were ever evaluated?
+
+```dql
+fetch spans, from:now()-7d
+| filter gen_ai.operation.name == "chat" and in(service.name, {"claude-code", "claude-code-desktop"})
+| fieldsAdd trace_id = toString(trace.id), has_prompt = isNotNull(gen_ai.prompt.0.content)
+| summarize turns = count(), with_prompt = countIf(has_prompt), by: { trace_id }
+| join [
+    fetch bizevents, from:now()-7d
+    | filter event.type == "gen_ai.evaluation.result"
+    | summarize evaluated = count(), by: { trace_id }
+  ], on: { trace_id }, fields: { evaluated }, kind: leftOuter
+| summarize turns = count(), with_prompt = countIf(with_prompt > 0), evaluated = countIf(isNotNull(evaluated))
+```
+
+`with_prompt` is 0 while prompt capture is off; the evaluators then have nothing to score.

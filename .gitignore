@@ -4,3 +4,9 @@ test/sink-data/
 test/sink.log
 *.tar.gz
 .DS_Store
+dist/
+connector/deploy/.out/
+connector/test/mocks/.run/
+connector/test/mock_server.stderr
+evals/.dt-eval.yaml
+evals/.env

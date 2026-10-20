@@ -23,7 +23,7 @@
       "kpi_cost": {
         "type": "data",
         "title": "Official cost — last 30 usage days",
-        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize cost_usd = sum(cost_usd)",
+        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize cost_usd = sum(cost_usd)",
         "visualization": "singleValue",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -65,7 +65,7 @@
       "kpi_devs": {
         "type": "data",
         "title": "Developers with usage",
-        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| filter isNotNull(user.email)\n| summarize developers = countDistinct(user.email)",
+        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| filter isNotNull(user.email)\n| summarize developers = countDistinct(user.email)",
         "visualization": "singleValue",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -107,7 +107,7 @@
       "kpi_tokens": {
         "type": "data",
         "title": "Tokens — last 30 usage days",
-        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize tokens = sum(tokens.total)",
+        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize tokens = sum(tokens.total)",
         "visualization": "singleValue",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -149,7 +149,7 @@
       "kpi_latest": {
         "type": "data",
         "title": "Latest usage day imported",
-        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| dedup dedup.key, sort: {timestamp desc}\n| summarize latest_usage_day = max(usage.date)\n| fields latest_usage_day",
+        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| dedup dedup.key, sort: {timestamp desc}\n| summarize latest_usage_day = max(usage.date)\n| fields latest_usage_day",
         "visualization": "singleValue",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -178,7 +178,7 @@
       "daily_cost": {
         "type": "data",
         "title": "Daily cost by usage day, stacked by product (USD)",
-        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| makeTimeseries cost_usd = sum(cost_usd), by: {product}, time: toTimestamp(usage.timestamp), interval: 1d, from: now() - 30d, to: now()",
+        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| makeTimeseries cost_usd = sum(cost_usd), by: {product}, time: toTimestamp(usage.timestamp), interval: 1d, from: now() - 30d, to: now()",
         "visualization": "barChart",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -221,7 +221,7 @@
       "top10": {
         "type": "data",
         "title": "Top 10 developers by cost, split by product (USD)",
-        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| filter isNotNull(user.email)\n| summarize {\n    total_usd = sum(cost_usd),\n    claude_code = sum(if(product == \"claude_code\", cost_usd, else: 0.0)),\n    chat = sum(if(product == \"chat\", cost_usd, else: 0.0)),\n    cowork = sum(if(product == \"cowork\", cost_usd, else: 0.0)),\n    design = sum(if(product == \"design\", cost_usd, else: 0.0)),\n    api_other = sum(if(product == \"api\" or product == \"other\", cost_usd, else: 0.0))\n  }, by: {user.email}\n| sort total_usd desc\n| limit 10\n| fieldsRemove total_usd",
+        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| filter isNotNull(user.email)\n| summarize {\n    total_usd = sum(cost_usd),\n    claude_code = sum(if(product == \"claude_code\", cost_usd, else: 0.0)),\n    chat = sum(if(product == \"chat\", cost_usd, else: 0.0)),\n    cowork = sum(if(product == \"cowork\", cost_usd, else: 0.0)),\n    design = sum(if(product == \"design\", cost_usd, else: 0.0)),\n    api_other = sum(if(product == \"api\" or product == \"other\", cost_usd, else: 0.0))\n  }, by: {user.email}\n| sort total_usd desc\n| limit 10\n| fieldsRemove total_usd",
         "visualization": "categoricalBarChart",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -315,7 +315,7 @@
       "cost_per_dev": {
         "type": "data",
         "title": "Cost per developer — last 30 usage days",
-        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    cost_usd = sum(cost_usd),\n    tokens_total = sum(tokens.total),\n    requests = sum(requests),\n    days_active = countDistinct(usage.date),\n    sources = collectDistinct(source)\n  }, by: {user.email}\n| fieldsAdd usd_per_1m_tokens = if(tokens_total > 0, cost_usd / tokens_total * 1000000, else: 0)\n| sort cost_usd desc",
+        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // drop the sample.csv demo rows\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    cost_usd = sum(cost_usd),\n    tokens_total = sum(tokens.total),\n    requests = sum(requests),\n    days_active = countDistinct(usage.date),\n    sources = collectDistinct(source)\n  }, by: {user.email}\n| fieldsAdd usd_per_1m_tokens = if(tokens_total > 0, cost_usd / tokens_total * 1000000, else: 0)\n| sort cost_usd desc",
         "visualization": "table",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -390,7 +390,7 @@
       "tokens_product_model": {
         "type": "data",
         "title": "Tokens by product × model, stacked by token type",
-        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    input = sum(tokens.input),\n    output = sum(tokens.output),\n    cache_read = sum(tokens.cache_read),\n    cache_creation = sum(tokens.cache_creation),\n    total = sum(tokens.total)\n  }, by: {product, model}\n| sort total desc\n| limit 25\n| fieldsAdd product_model = concat(product, \" · \", model)\n| fields product_model, input, output, cache_read, cache_creation",
+        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| filter usage.date >= formatTimestamp(now() - 30d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    input = sum(tokens.input),\n    output = sum(tokens.output),\n    cache_read = sum(tokens.cache_read),\n    cache_creation = sum(tokens.cache_creation),\n    total = sum(tokens.total)\n  }, by: {product, model}\n| sort total desc\n| limit 25\n| fieldsAdd product_model = concat(product, \" · \", model)\n| fields product_model, input, output, cache_read, cache_creation",
         "visualization": "categoricalBarChart",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -478,7 +478,7 @@
       "kpi_coverage": {
         "type": "data",
         "title": "Observed / official tokens",
-        "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\" and product == \"claude_code\"\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize official_tokens = sum(tokens.total)\n| append [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\"\n    | summarize observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens))\n  ]\n| summarize official_tokens = sum(official_tokens), observed_tokens = sum(observed_tokens)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0.0)\n| fields coverage_pct",
+        "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\" and product == \"claude_code\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize official_tokens = sum(tokens.total)\n| append [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\"\n    | summarize observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens))\n  ]\n| summarize official_tokens = sum(official_tokens), observed_tokens = sum(observed_tokens)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0.0)\n| fields coverage_pct",
         "visualization": "singleValue",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -551,7 +551,7 @@
       "coverage_table": {
         "type": "data",
         "title": "Official vs observed per developer per day",
-        "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\" and product == \"claude_code\"\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    official_tokens = sum(tokens.total),\n    official_cost_usd = sum(cost_usd)\n  }, by: {user.email, usage.date}\n| join [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\"\n    | fieldsAdd usage.date = formatTimestamp(timestamp, format: \"yyyy-MM-dd\")\n    | summarize {\n        observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)),\n        observed_cost_usd = sum(toDouble(cost_usd)),\n        api_requests = count()\n      }, by: {user.email, usage.date}\n  ], on: {user.email, usage.date}, kind: outer, prefix: \"obs.\"\n| fieldsAdd observed_tokens = coalesce(obs.observed_tokens, 0), observed_cost_usd = coalesce(obs.observed_cost_usd, 0.0)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0)\n| fieldsAdd delta_usd = coalesce(official_cost_usd, 0.0) - observed_cost_usd\n| fields usage.date, user.email, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = obs.api_requests\n| sort usage.date desc, delta_usd desc",
+        "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // drop the sample.csv demo rows and product == \"claude_code\"\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    official_tokens = sum(tokens.total),\n    official_cost_usd = sum(cost_usd)\n  }, by: {user.email, usage.date}\n| join [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\"\n    | fieldsAdd usage.date = formatTimestamp(timestamp, format: \"yyyy-MM-dd\")\n    | summarize {\n        observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)),\n        observed_cost_usd = sum(toDouble(cost_usd)),\n        api_requests = count()\n      }, by: {user.email, usage.date}\n  ], on: {user.email, usage.date}, kind: outer, prefix: \"obs.\"\n| fieldsAdd observed_tokens = coalesce(obs.observed_tokens, 0), observed_cost_usd = coalesce(obs.observed_cost_usd, 0.0)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0)\n| fieldsAdd delta_usd = coalesce(official_cost_usd, 0.0) - observed_cost_usd\n| fields usage.date, user.email, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = obs.api_requests\n| sort usage.date desc, delta_usd desc",
         "visualization": "table",
         "visualizationSettings": {
           "autoSelectVisualization": false,
@@ -659,7 +659,7 @@
       "freshness": {
         "type": "data",
         "title": "Freshness per source",
-        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    latest_usage_day = max(usage.date),\n    latest_usage = max(toTimestamp(usage.timestamp)),\n    data_refreshed_at = max(toTimestamp(data.refreshed_at)),\n    last_ingest = max(timestamp),\n    developers = countDistinct(user.email),\n    records = count()\n  }, by: {source}\n| fieldsAdd usage_day_lag = now() - latest_usage  // usage.date is a UTC yyyy-MM-dd string: never formatTimestamp() it (viewer timezone shifts the day)\n| fields source, latest_usage_day, usage_day_lag, data_refreshed_at, last_ingest, developers, records\n| sort latest_usage_day desc",
+        "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    latest_usage_day = max(usage.date),\n    latest_usage = max(toTimestamp(usage.timestamp)),\n    data_refreshed_at = max(toTimestamp(data.refreshed_at)),\n    last_ingest = max(timestamp),\n    developers = countDistinct(user.email),\n    records = count()\n  }, by: {source}\n| fieldsAdd usage_day_lag = now() - latest_usage  // usage.date is a UTC yyyy-MM-dd string: never formatTimestamp() it (viewer timezone shifts the day)\n| fields source, latest_usage_day, usage_day_lag, data_refreshed_at, last_ingest, developers, records\n| sort latest_usage_day desc",
         "visualization": "table",
         "visualizationSettings": {
           "autoSelectVisualization": false,

@@ -24,6 +24,7 @@ NAME = "Claude Usage — Official Cost per Developer (layer 3)"
 # ---------------------------------------------------------------- DQL building blocks
 BASE_30D = """fetch bizevents, from: now() - 45d
 | filter event.type == "claude.usage.daily"
+| filter coalesce(org.id, "") != "demo-sample"  // demo rows loaded from csv-import/sample.csv
 | filter usage.date >= formatTimestamp(now() - 30d, format: "yyyy-MM-dd")
 | dedup dedup.key, sort: {timestamp desc}"""
 
@@ -47,6 +48,7 @@ Q_TOKENS = BASE_30D + "\n| summarize tokens = sum(tokens.total)"
 
 Q_LATEST_DAY = """fetch bizevents, from: now() - 45d
 | filter event.type == "claude.usage.daily"
+| filter coalesce(org.id, "") != "demo-sample"  // demo rows loaded from csv-import/sample.csv
 | dedup dedup.key, sort: {timestamp desc}
 | summarize latest_usage_day = max(usage.date)
 | fields latest_usage_day"""
@@ -90,6 +92,7 @@ Q_OFFICIAL_VS_OBSERVED = dql_file("official-vs-observed-tokens.dql")
 # coverage KPI: observed (layer 2 logs) / official (layer 3) tokens, claude_code, last 7 usage days
 Q_COVERAGE = """fetch bizevents, from: now() - 10d
 | filter event.type == "claude.usage.daily" and product == "claude_code"
+| filter coalesce(org.id, "") != "demo-sample"  // demo rows loaded from csv-import/sample.csv
 | filter usage.date >= formatTimestamp(now() - 7d, format: "yyyy-MM-dd")
 | dedup dedup.key, sort: {timestamp desc}
 | summarize official_tokens = sum(tokens.total)
@@ -104,6 +107,7 @@ Q_COVERAGE = """fetch bizevents, from: now() - 10d
 
 Q_FRESHNESS = """fetch bizevents, from: now() - 45d
 | filter event.type == "claude.usage.daily"
+| filter coalesce(org.id, "") != "demo-sample"  // demo rows loaded from csv-import/sample.csv
 | dedup dedup.key, sort: {timestamp desc}
 | summarize {
     latest_usage_day = max(usage.date),

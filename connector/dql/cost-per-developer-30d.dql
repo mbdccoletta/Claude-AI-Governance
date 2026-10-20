@@ -3,6 +3,7 @@
 // (Anthropic revises values), so the same dedup.key appears several times: keep the newest record.
 fetch bizevents, from: now() - 45d
 | filter event.type == "claude.usage.daily"
+| filter coalesce(org.id, "") != "demo-sample"  // drop the sample.csv demo rows
 | filter usage.date >= formatTimestamp(now() - 30d, format: "yyyy-MM-dd")
 | dedup dedup.key, sort: {timestamp desc}
 | summarize {

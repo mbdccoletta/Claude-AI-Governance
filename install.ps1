@@ -29,6 +29,7 @@ param(
     [int]$HealthPort = 0,                           # 0 = 13133 or next free
     [switch]$CapturePrompts,
     [switch]$EnableNativeOtel,
+    [switch]$EnableEvals,                           # print how to run Dynatrace Evals (dt-evals); nothing is run
     [string]$OtelcolVersion = $env:DT_AI_OBS_OTELCOL_VERSION,
     [string]$OtelcolTarball,
     [switch]$QuietCollector,
@@ -241,9 +242,29 @@ Done.
   Collector config/logs  : $InstallDir\otel-collector.yaml, $InstallDir\logs\collector.log
   Prompt capture         : $(if ($CapturePrompts) { 'ON' } else { 'off' })
   Native Claude OTel     : $(if ($EnableNativeOtel) { 'on (settings.json env)' } else { 'off (see managed-settings.example.json)' })
+  Dynatrace Evals        : not run automatically - evals\run-evals.ps1 help (needs prompt capture ON; calls an LLM judge)
 
 Next steps:
   * Restart open Claude Code sessions (Desktop Code tab and CLI) so the hooks load.
   * Import Dashboard\Developers AI Usage.json in the tenant (Dashboards -> Upload).
+  * Optional: score prompts/responses with Dynatrace Evals - see README "Dynatrace Evals" (evals\run-evals.ps1 plan).
   * Service control:  Start-ScheduledTask -TaskName '$TaskName'   /   Stop-ScheduledTask -TaskName '$TaskName'
 "@
+
+# -- 8. Dynatrace Evals pointer (print only, never runs) ----------------------
+if ($EnableEvals) {
+    $nodeOk = $false; $nodeVer = ''
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if ($nodeCmd) { $nodeVer = (& node --version); if ([int]($nodeVer.TrimStart('v').Split('.')[0]) -ge 20) { $nodeOk = $true } }
+    @"
+
+Dynatrace Evals (dt-evals) - optional, not started by this installer
+  Node.js >= 20          : $(if ($nodeOk) { "ok ($nodeVer)" } else { 'MISSING - install from https://nodejs.org' })
+  Prompt capture         : $(if ($CapturePrompts) { 'ON' } else { 'OFF - evaluators need prompt/response text; re-run with -CapturePrompts' })
+  1. Platform token      : $AssetDir\evals\run-evals.ps1 doctor     (scopes: storage:spans:read storage:buckets:read storage:bizevents:read openpipeline:bizevents:ingest storage:logs:read)
+  2. Judge key           : `$env:ANTHROPIC_API_KEY = '...' (or OPENAI_API_KEY, -Provider)
+  3. Preview, no judge   : $AssetDir\evals\run-evals.ps1 preview -Since 1h
+  4. Real run (asks)     : $AssetDir\evals\run-evals.ps1 run -Since 1h -Sample 10 -Metrics prompt-injection,pii-leakage
+  Each real run calls an external LLM judge (costs money). Results: fetch bizevents | filter event.type == "gen_ai.evaluation.result"
+"@
+}

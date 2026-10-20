@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # hook-version: 1.7.0
-# dt-ai-observability-claude: upstream hook v1.7.0 + service.name patch (see hooks/otel-hook.patch)
+# dt-ai-observability-claude: upstream hook v1.7.0 + service.name and prompt-cleaning patches (see hooks/otel-hook.patch)
 """
 Dynatrace AI Governance For Devs — Claude Code OTel Hook v2
 Captura: prompt, model, tokens, custo, duração total e tool calls (input+output).
 Requer: Python 3.6+ (sem dependências externas)
 """
-import sys, json, time, random, os, glob, urllib.request, threading
+import sys, json, time, random, os, glob, urllib.request, threading, re
 
 DEFAULT_PORT  = 4318
 ATTRS_FILE    = os.path.expanduser("~/.claude/otel-attrs.json")
@@ -17,6 +17,20 @@ GEN_AI_SYSTEM = "anthropic"
 STATE_DIR     = os.path.expanduser("~/.claude/otel-state")
 SETTINGS_FILE = os.path.expanduser("~/.claude/settings.json")
 MAX_LEN       = 4096  # corta atributos muito longos
+
+# dt-ai-observability-claude: the Claude Desktop app and other harnesses inject
+# <system-reminder>…</system-reminder> blocks into the user turn (linked-session
+# notes, task results, instruction reminders). They are orchestration noise, not
+# the human prompt, so drop them. Pasted text arrives wrapped in
+# <pasted_content id="…">…</pasted_content>: keep the text, drop the wrapper.
+_RE_SYSREM = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
+_RE_PASTED = re.compile(r"<pasted_content[^>]*>(.*?)</pasted_content[^>]*>", re.S)
+def clean_prompt(text):
+    if not text: return text
+    text = _RE_SYSREM.sub("", text)
+    text = _RE_PASTED.sub(lambda m: m.group(1).strip(), text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 def trunc(v, n=MAX_LEN):
     s = json.dumps(v) if not isinstance(v, str) else v
@@ -181,7 +195,7 @@ def main():
     if hook_event == "UserPromptSubmit":
         state["turn_start_ns"]  = now_ns
         state["turn_span_id"]   = rand_span()
-        state["prompt_text"]    = event.get("prompt", "")
+        state["prompt_text"]    = clean_prompt(event.get("prompt", ""))
         state["model"]          = get_model()
         with open(state_file, "w", encoding='utf-8') as f:
             json.dump(state, f)

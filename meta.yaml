@@ -5,7 +5,12 @@ description: >
   without VS Code: the same Python hook and OpenTelemetry Collector used by the
   dt-ai-observability-vscode asset, packaged as a user service with the API
   token in the OS credential store, plus optional Claude Code native OTel
-  metrics and logs and the shared "Developers AI Usage" dashboard.
+  metrics and logs and the shared "Developers AI Usage" dashboard. Includes a
+  third layer, connector/: a Dynatrace Workflow (plus a Team-plan CSV importer)
+  that imports Anthropic's official per-user daily usage and cost (Enterprise
+  Analytics API, Console Admin API) as claude.usage.daily business events,
+  covering claude.ai chat, Cowork, Design and Claude Code on the web, with a
+  dashboard and a dtctl-based deploy script.
 purpose: >
   When developers use Claude through the Desktop app or the terminal instead
   of VS Code, this integration gives per-developer token, cost, model and
@@ -24,6 +29,8 @@ tags:
   - OTel
   - ClaudeCode
   - FinOps
+  - Workflows
+  - BizEvents
 setup_instructions: >
   Create a Dynatrace API token with openTelemetryTrace.ingest, metrics.ingest
   and logs.ingest scopes. On each developer machine run install.sh (macOS,
@@ -33,6 +40,14 @@ setup_instructions: >
   Optionally roll out managed-settings.example.json as Claude Code managed
   settings to add native metrics and logs. Prompt and response capture is off
   by default and must be explicitly enabled with --capture-prompts.
+  Optional: evals/run-evals.sh (or .ps1) scores the captured prompts with the
+  open-source dt-evals CLI (prompt injection, PII leakage, ...) using an LLM
+  judge; it is opt-in, asks before every paid run and writes results back to
+  the tenant as gen_ai.evaluation.result bizevents.
+  For the official cost layer, store the Anthropic Analytics or Admin API key
+  as a Token credential (AppEngine scope) in the Credential vault and run
+  connector/deploy/deploy.sh --org-type enterprise|console|team --yes with a
+  dtctl context on the tenant; see connector/README.md.
 related_assets:
   - /integrations/application/dt-ai-observability-vscode
   - /apps/application/ai-observability-3-0

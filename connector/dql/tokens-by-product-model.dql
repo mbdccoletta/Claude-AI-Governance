@@ -2,6 +2,7 @@
 // product is the normalised enum (chat|claude_code|cowork|design|api|other); product.raw keeps Anthropic's value.
 fetch bizevents, from: now() - 45d
 | filter event.type == "claude.usage.daily"
+| filter coalesce(org.id, "") != "demo-sample"  // drop the sample.csv demo rows
 | filter usage.date >= formatTimestamp(now() - 30d, format: "yyyy-MM-dd")
 | dedup dedup.key, sort: {timestamp desc}
 | summarize {

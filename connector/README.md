@@ -24,6 +24,8 @@ connector/
 
 ## Installation at a glance
 
+![Data collection architecture](docs/data-collection-architecture.svg)
+
 ![Installation process](docs/installation-process.svg)
 
 Tenant prerequisites once (AI Obs app, ingest token, Anthropic key in the vault), then `install.sh` on each developer machine (layers 1+2)
@@ -90,6 +92,8 @@ Columns mapped: `user email`→`user.email`, `account UUID`→`user.id`, `produc
 user/product/model are summed. Cache tokens are not in the export (0).
 
 ## Querying
+
+The layer 3 dashboard excludes rows with `org.id == "demo-sample"` (the fake rows `csv-import/sample.csv` produces); keep that filter if you load the sample into a shared tenant, since bizevents cannot be deleted.
 
 Ingest is append-only and the connector re-reads recent days on purpose, so **every query dedupes**:
 `| dedup dedup.key, sort: {timestamp desc}` (newest revision wins) and filters on `usage.date`, not `timestamp`.

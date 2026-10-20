@@ -24,6 +24,8 @@
 #   --capture-prompts          send prompt/response content (default: off)
 #   --enable-native-otel       also turn on Claude Code's native OTel metrics/logs
 #                              (env block in ~/.claude/settings.json)
+#   --enable-evals             check Node.js >= 20 and print how to score the captured
+#                              prompts with Dynatrace Evals (dt-evals); nothing is run
 #   --otelcol-version X.Y.Z    pin the collector release (default: latest)
 #   --otelcol-tarball PATH     use a local release tarball instead of downloading
 #   --quiet-collector          no debug exporter (smaller collector log)
@@ -56,12 +58,13 @@ HEALTH_PORT=""
 GRPC_PORT=4317
 CAPTURE_PROMPTS=0
 NATIVE_OTEL=0
+ENABLE_EVALS=0
 OTELCOL_VERSION="${DT_AI_OBS_OTELCOL_VERSION:-}"
 OTELCOL_TARBALL=""
 QUIET_COLLECTOR=0
 NON_INTERACTIVE=0
 
-usage() { sed -n '2,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,38p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -81,6 +84,7 @@ while [ $# -gt 0 ]; do
     --enable-native-otel) NATIVE_OTEL=1; shift ;;
     --otelcol-version) OTELCOL_VERSION="$2"; shift 2 ;;
     --otelcol-tarball) OTELCOL_TARBALL="$2"; shift 2 ;;
+    --enable-evals) ENABLE_EVALS=1; shift ;;
     --quiet-collector) QUIET_COLLECTOR=1; shift ;;
     --non-interactive) NON_INTERACTIVE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -335,10 +339,31 @@ Done.
   Collector config/logs  : $INSTALL_DIR/otel-collector.yaml, $INSTALL_DIR/logs/collector.log
   Prompt capture         : $([ "$CAPTURE_PROMPTS" = 1 ] && echo ON || echo off)
   Native Claude OTel     : $([ "$NATIVE_OTEL" = 1 ] && echo "on (settings.json env)" || echo "off (see managed-settings.example.json)")
+  Dynatrace Evals        : not run automatically — evals/run-evals.sh --help (needs prompt capture ON; calls an LLM judge)
 
 Next steps:
   • Restart open Claude Code sessions (Desktop Code tab and CLI) so the hooks load.
   • Import Dashboard/Developers AI Usage.json in the tenant (Dashboards → Upload).
+  • Optional: score prompts/responses with Dynatrace Evals — see README "Dynatrace Evals" (evals/run-evals.sh plan).
   • Service control:
   $SERVICE_HINT
 SUMMARY
+
+# ── 8. Dynatrace Evals pointer (print only, never runs) ──────────────────────
+if [ "$ENABLE_EVALS" = 1 ]; then
+  NODE_OK=0
+  if command -v node >/dev/null 2>&1; then
+    NODE_MAJOR="$(node --version | sed -E 's/^v([0-9]+).*/\1/')"; [ "${NODE_MAJOR:-0}" -ge 20 ] 2>/dev/null && NODE_OK=1
+  fi
+  cat <<EVALS
+
+Dynatrace Evals (dt-evals) — optional, not started by this installer
+  Node.js >= 20          : $([ "$NODE_OK" = 1 ] && echo "ok ($(node --version))" || echo "MISSING — install from https://nodejs.org")
+  Prompt capture         : $([ "$CAPTURE_PROMPTS" = 1 ] && echo "ON" || echo "OFF — evaluators need prompt/response text; re-run with --capture-prompts")
+  1. Platform token      : $ASSET_DIR/evals/run-evals.sh doctor     (scopes: storage:spans:read storage:buckets:read storage:bizevents:read openpipeline:bizevents:ingest storage:logs:read)
+  2. Judge key           : export ANTHROPIC_API_KEY=... (or OPENAI_API_KEY, --provider)
+  3. Preview, no judge   : $ASSET_DIR/evals/run-evals.sh preview --since 1h
+  4. Real run (asks)     : $ASSET_DIR/evals/run-evals.sh run --since 1h --sample 10 --metrics prompt-injection,pii-leakage
+  Each real run calls an external LLM judge (costs money). Results: fetch bizevents | filter event.type == "gen_ai.evaluation.result"
+EVALS
+fi

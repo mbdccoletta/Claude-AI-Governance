@@ -5,7 +5,8 @@
 // Expect observed <= official for claude_code: hooks only see sessions that ran on instrumented machines,
 // and the official number also covers claude.ai Claude Code on the web.
 fetch bizevents, from: now() - 10d
-| filter event.type == "claude.usage.daily" and product == "claude_code"
+| filter event.type == "claude.usage.daily"
+| filter coalesce(org.id, "") != "demo-sample"  // drop the sample.csv demo rows and product == "claude_code"
 | filter usage.date >= formatTimestamp(now() - 7d, format: "yyyy-MM-dd")
 | dedup dedup.key, sort: {timestamp desc}
 | summarize {

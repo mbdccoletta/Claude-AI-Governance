@@ -4,6 +4,12 @@ Três revisões independentes (segurança, correção de código, documentação
 (DQL validado no tenant de laboratório, renderização dos diagramas, conteúdo do log local do collector). Relatórios completos:
 [SECURITY-REVIEW.md](SECURITY-REVIEW.md) · [CODE-REVIEW.md](CODE-REVIEW.md) · [DOCS-REVIEW.md](DOCS-REVIEW.md).
 
+## Estado em 2026-10-20 (1.0.1)
+
+Os quatro lotes foram implementados e validados no fov31014, um commit por lote: P1 `3ebe0cf` (hook/privacidade), P3 `b1d3e36`
+(instalador/collector/supply chain), P2 `aafa4b8` (workflow), P4 `e4d4245` (dimensões por desenvolvedor nas métricas nativas).
+Detalhes em [CHANGELOG.md](../CHANGELOG.md) · 1.0.1. O que segue abaixo é a análise original sobre a 1.0.0.
+
 ## Veredito
 
 **Funciona e está pronto para demonstração; não está pronto para rollout em clientes sem o lote P1.** O que está sólido: token de ingest

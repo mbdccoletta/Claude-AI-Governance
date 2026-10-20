@@ -1,7 +1,7 @@
 # Dynatrace AI Observability for Claude — Guia de Implantação
 
 **Claude Desktop (aba Code) · Claude Code CLI → OpenTelemetry → Dynatrace**
-Versão 1.0.0 · Dynatrace Solutions Engineering LATAM
+Versão 1.0.1 · Dynatrace Solutions Engineering LATAM
 
 ---
 

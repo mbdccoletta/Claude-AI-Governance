@@ -1,6 +1,9 @@
 # Changelog
 
-## 1.0.1 — 2026-10-20 (in progress: batches P1–P4 from docs/FINAL-REVIEW.md)
+## 1.0.1 — 2026-10-20
+
+Hardening release: the four batches (P1–P4) of [docs/FINAL-REVIEW.md](docs/FINAL-REVIEW.md). No schema or dashboard-id changes;
+re-run the installer and `connector/deploy/deploy.sh` to pick everything up.
 
 ### P1 · hook privacy and integrity
 - `claude.tool_input` / `claude.tool_response` are sent only with `--capture-prompts`; the collector redaction processor also deletes them (`error_mode: propagate`).
@@ -106,6 +109,6 @@ First complete version of **Dynatrace AI Observability for Claude**: three layer
 - Native logs/metrics from Claude Code on the web require the OTEL_* variables in the cloud environment (no local collector there).
 - `user.email`, `squad` and `cost_center` are resource attributes on the native metrics, not datapoint dimensions: `timeseries … by: {user.email}`
   on `claude_code.*` returns null (verified). Per-developer splits come from the hook spans and the `api_request` log events; datapoint-level
-  stamping in the collector is planned.
-- `claude.tool_input` / `claude.tool_response` (first 4 KiB) are sent on every tool span regardless of `--capture-prompts`; a redaction option is planned.
-- The installer only checks that the ingest token is non-empty (a double paste into the hidden prompt yields 401); a format check is planned.
+  stamping in the collector is planned. *(fixed in 1.0.1, P4)*
+- `claude.tool_input` / `claude.tool_response` (first 4 KiB) are sent on every tool span regardless of `--capture-prompts`; a redaction option is planned. *(fixed in 1.0.1, P1)*
+- The installer only checks that the ingest token is non-empty (a double paste into the hidden prompt yields 401); a format check is planned. *(fixed in 1.0.1, P3)*

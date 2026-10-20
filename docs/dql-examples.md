@@ -19,7 +19,7 @@ fetch spans, from:now()-24h
     Requests      = count(),
     Input_Tokens  = sum(toLong(`gen_ai.usage.input_tokens`)),
     Output_Tokens = sum(toLong(`gen_ai.usage.output_tokens`)),
-    Avg_Duration  = avg(duration)
+    Avg_Duration  = avg(duration),
   by: { Developer = `user.email`, Client = service.name }
 | sort Input_Tokens desc
 ```
@@ -32,8 +32,8 @@ fetch spans, from:now()-24h
 | filter startsWith(span.name, "chat")
 | summarize Requests = count(),
             Total_Tokens = sum(toLong(`gen_ai.usage.input_tokens`) + toLong(`gen_ai.usage.output_tokens`)),
-            Avg_Duration = avg(duration)
-  by: Model = `gen_ai.request.model`
+            Avg_Duration = avg(duration),
+  by: {Model = `gen_ai.request.model`}
 | sort Total_Tokens desc
 ```
 
@@ -48,7 +48,7 @@ fetch spans, from:now()-30d
     if(contains(`gen_ai.request.model`, "opus"),   inp * 0.000015  + out * 0.000075,
     else: if(contains(`gen_ai.request.model`, "haiku"), inp * 0.000001 + out * 0.000005,
     else: inp * 0.000003 + out * 0.000015))
-| summarize Est_Cost_USD = sum(est_cost_usd), Requests = count(), Developers = countDistinct(`user.email`)
+| summarize Est_Cost_USD = sum(est_cost_usd), Requests = count(), Developers = countDistinct(`user.email`),
   by: { squad, cost_center }
 | sort Est_Cost_USD desc
 ```
@@ -63,7 +63,7 @@ fetch spans, from:now()-30d
 fetch spans, from:now()-1h
 | filter in(service.name, {"claude-code", "claude-code-desktop"})
 | filter startsWith(span.name, "claude.tool.")
-| summarize Calls = count(), Avg_ms = avg(toDouble(`claude.duration_ms`))
+| summarize Calls = count(), Avg_ms = avg(toDouble(`claude.duration_ms`)),
   by: { Tool = `claude.tool_name`, Developer = `user.email` }
 | sort Calls desc
 ```
@@ -106,7 +106,7 @@ fetch logs, from:now()-24h
     Cache_Read      = sum(toLong(cache_read_tokens)),
     Cache_Creation  = sum(toLong(cache_creation_tokens)),
     Cost_USD        = sum(toDouble(cost_usd)),
-    Avg_Duration_ms = avg(toDouble(duration_ms))
+    Avg_Duration_ms = avg(toDouble(duration_ms)),
   by: { Developer = `user.email`, Model = model }
 | sort Cost_USD desc
 ```

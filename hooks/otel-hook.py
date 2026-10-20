@@ -92,7 +92,11 @@ def turn_usage(transcript_path, session_id, start_offset):
         path = files[0] if files else None
     if not path:
         return result
-    inp = out = 0; seen = False; cost = 0.0; has_cost = False
+    # Claude Code persists one API response as one transcript line per content block, and every
+    # line repeats the response's usage (and costUSD). Count each response once: key by
+    # message.id, keep the line with the highest output_tokens (the final streamed value).
+    # Lines without an id are counted individually.
+    per_msg = {}; anon = 0
     try:
         size = os.path.getsize(path)
         off = start_offset if (isinstance(start_offset, int) and 0 <= start_offset <= size) else 0
@@ -108,13 +112,14 @@ def turn_usage(transcript_path, session_id, start_offset):
                     continue
                 if msg.get("model"): result["model"] = msg["model"]
                 usage = msg.get("usage") or {}
-                if usage:
-                    seen = True
-                    inp += (usage.get("input_tokens") or 0) + (usage.get("cache_read_input_tokens") or 0) + (usage.get("cache_creation_input_tokens") or 0)
-                    out += usage.get("output_tokens") or 0
                 c = r.get("costUSD", msg.get("costUSD"))
-                if isinstance(c, (int, float)):
-                    cost += c; has_cost = True
+                if usage or isinstance(c, (int, float)):
+                    key = msg.get("id")
+                    if not key:
+                        anon += 1; key = f"_anon{anon}"
+                    prev = per_msg.get(key)
+                    if prev is None or (usage.get("output_tokens") or 0) >= (prev[0].get("output_tokens") or 0):
+                        per_msg[key] = (usage, c if isinstance(c, (int, float)) else (prev[1] if prev else None))
                 content = msg.get("content", [])
                 if isinstance(content, list):
                     texts = [b["text"] for b in content if isinstance(b, dict) and b.get("type") == "text" and b.get("text", "").strip()]
@@ -122,10 +127,13 @@ def turn_usage(transcript_path, session_id, start_offset):
             result["offset"] = f.tell()
     except Exception:
         pass
-    if seen:
-        result["input_tokens"], result["output_tokens"] = inp, out
-    if has_cost:
-        result["cost_usd"] = round(cost, 6)
+    usages = [u for u, _ in per_msg.values() if u]
+    if usages:
+        result["input_tokens"] = sum((u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0) + (u.get("cache_creation_input_tokens") or 0) for u in usages)
+        result["output_tokens"] = sum(u.get("output_tokens") or 0 for u in usages)
+    costs = [c for _, c in per_msg.values() if isinstance(c, (int, float))]
+    if costs:
+        result["cost_usd"] = round(sum(costs), 6)
     return result
 
 def is_human_prompt(entry):

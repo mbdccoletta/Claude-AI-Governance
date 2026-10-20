@@ -20,7 +20,7 @@
       "type": "query",
       "visible": true,
       "editable": true,
-      "input": "fetch spans\n| filter isNotNull(gen_ai.request.model) and contains(gen_ai.request.model, \"claude\")\n| summarize c=count(), by:{gen_ai.request.model}\n| fields gen_ai.request.model",
+      "input": "fetch spans\n| filter isNotNull(gen_ai.request.model) and contains(gen_ai.request.model, \"claude\")\n| fields m = gen_ai.request.model\n| append [fetch logs | filter event.name == \"api_request\" and in(service.name, {\"claude-code\", \"claude-code-desktop\"}) | fields m = model]\n| filter isNotNull(m)\n| summarize c = count(), by: {m}\n| fields gen_ai.request.model = m",
       "multiple": true,
       "defaultValue": [
         "claude-fable-5-1",
@@ -48,7 +48,7 @@
     "11": {
       "title": "Custo estimado (USD)",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter isNotNull(gen_ai.request.model) and not(contains(gen_ai.request.model,\"embedding\")) and not(contains(gen_ai.request.model,\"metis\"))\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| fieldsAdd inp=toDouble(gen_ai.usage.input_tokens), out=toDouble(gen_ai.usage.output_tokens)\n| fieldsAdd cost_usd=if(contains(gen_ai.request.model,\"opus\"),(inp*0.000015)+(out*0.000075),else:if(contains(gen_ai.request.model,\"sonnet\"),(inp*0.000003)+(out*0.000015),else:if(contains(gen_ai.request.model,\"haiku\"),(inp*0.0000008)+(out*0.000004),else:if(contains(gen_ai.request.model,\"mini\"),(inp*0.00000015)+(out*0.0000006),else:if(contains(gen_ai.request.model,\"gpt-4o\"),(inp*0.0000025)+(out*0.00001),else:if(contains(gen_ai.request.model,\"gemini\"),(inp*0.00000125)+(out*0.000005),else:(inp*0.000002)+(out*0.00001)))))))\n| summarize total=sum(cost_usd)",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| summarize total = sum(toDouble(cost_usd))",
       "visualization": "singleValue",
       "visualizationSettings": {
         "singleValue": {
@@ -201,7 +201,7 @@
     "21": {
       "title": "Custo por modelo (USD)",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter isNotNull(gen_ai.request.model) and not(contains(gen_ai.request.model,\"embedding\")) and not(contains(gen_ai.request.model,\"metis\"))\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| fieldsAdd inp=toDouble(gen_ai.usage.input_tokens), out=toDouble(gen_ai.usage.output_tokens)\n| fieldsAdd cost_usd=if(contains(gen_ai.request.model,\"opus\"),(inp*0.000015)+(out*0.000075),else:if(contains(gen_ai.request.model,\"sonnet\"),(inp*0.000003)+(out*0.000015),else:if(contains(gen_ai.request.model,\"haiku\"),(inp*0.0000008)+(out*0.000004),else:if(contains(gen_ai.request.model,\"mini\"),(inp*0.00000015)+(out*0.0000006),else:if(contains(gen_ai.request.model,\"gpt-4o\"),(inp*0.0000025)+(out*0.00001),else:if(contains(gen_ai.request.model,\"gemini\"),(inp*0.00000125)+(out*0.000005),else:(inp*0.000002)+(out*0.00001)))))))\n| summarize cost=sum(cost_usd), by:{gen_ai.request.model}\n| sort cost desc",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| summarize cost = sum(toDouble(cost_usd)), by: {model}\n| sort cost desc",
       "visualization": "categoricalBarChart",
       "visualizationSettings": {
         "autoSelectVisualization": false,
@@ -235,7 +235,7 @@
     "22": {
       "title": "Custo por time (USD)",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter isNotNull(user.team)\n| filter isNotNull(gen_ai.request.model) and not(contains(gen_ai.request.model,\"embedding\")) and not(contains(gen_ai.request.model,\"metis\"))\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| fieldsAdd inp=toDouble(gen_ai.usage.input_tokens), out=toDouble(gen_ai.usage.output_tokens)\n| fieldsAdd cost_usd=if(contains(gen_ai.request.model,\"opus\"),(inp*0.000015)+(out*0.000075),else:if(contains(gen_ai.request.model,\"sonnet\"),(inp*0.000003)+(out*0.000015),else:if(contains(gen_ai.request.model,\"haiku\"),(inp*0.0000008)+(out*0.000004),else:if(contains(gen_ai.request.model,\"mini\"),(inp*0.00000015)+(out*0.0000006),else:if(contains(gen_ai.request.model,\"gpt-4o\"),(inp*0.0000025)+(out*0.00001),else:if(contains(gen_ai.request.model,\"gemini\"),(inp*0.00000125)+(out*0.000005),else:(inp*0.000002)+(out*0.00001)))))))\n| summarize cost=sum(cost_usd), by:{user.team}\n| sort cost desc",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| summarize cost = sum(toDouble(cost_usd)), by: {user.team}\n| sort cost desc",
       "visualization": "categoricalBarChart",
       "visualizationSettings": {
         "autoSelectVisualization": false,
@@ -269,7 +269,7 @@
     "23": {
       "title": "Tokens ao longo do tempo por modelo",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter isNotNull(gen_ai.request.model) and not(contains(gen_ai.request.model,\"embedding\")) and not(contains(gen_ai.request.model,\"metis\"))\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| makeTimeseries tokens=sum(toLong(gen_ai.usage.input_tokens)+toLong(gen_ai.usage.output_tokens)), by:{gen_ai.request.model}",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| makeTimeseries tokens = sum(toLong(input_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens) + toLong(output_tokens)), by: {model}",
       "visualization": "barChart",
       "visualizationSettings": {
         "autoSelectVisualization": false
@@ -290,7 +290,7 @@
     "24": {
       "title": "Top devs por custo (USD)",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter isNotNull(user.email)\n| filter isNotNull(gen_ai.request.model) and not(contains(gen_ai.request.model,\"embedding\")) and not(contains(gen_ai.request.model,\"metis\"))\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| fieldsAdd inp=toDouble(gen_ai.usage.input_tokens), out=toDouble(gen_ai.usage.output_tokens)\n| fieldsAdd cost_usd=if(contains(gen_ai.request.model,\"opus\"),(inp*0.000015)+(out*0.000075),else:if(contains(gen_ai.request.model,\"sonnet\"),(inp*0.000003)+(out*0.000015),else:if(contains(gen_ai.request.model,\"haiku\"),(inp*0.0000008)+(out*0.000004),else:if(contains(gen_ai.request.model,\"mini\"),(inp*0.00000015)+(out*0.0000006),else:if(contains(gen_ai.request.model,\"gpt-4o\"),(inp*0.0000025)+(out*0.00001),else:if(contains(gen_ai.request.model,\"gemini\"),(inp*0.00000125)+(out*0.000005),else:(inp*0.000002)+(out*0.00001)))))))\n| fieldsAdd dev=replaceString(user.email,\"@boavista.com.br\",\"@email.example.com\")\n| summarize cost=sum(cost_usd), tokens=sum(toLong(inp+out)), requests=count(), by:{dev, user.team}\n| sort cost desc\n| limit 20",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| filter isNotNull(user.email)\n| summarize cost = sum(toDouble(cost_usd)), tokens = sum(toLong(input_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens) + toLong(output_tokens)), requests = count(), by: {dev = user.email, user.team}\n| sort cost desc\n| limit 20",
       "visualization": "table",
       "visualizationSettings": {},
       "querySettings": {
@@ -399,7 +399,7 @@
     "43": {
       "title": "Top devs por consumo",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter isNotNull(gen_ai.request.model) and not(contains(gen_ai.request.model,\"embedding\")) and not(contains(gen_ai.request.model,\"metis\"))\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| filter isNotNull(user.email)\n| fieldsAdd dev=replaceString(user.email,\"@boavista.com.br\",\"@email.example.com\")\n| summarize requests=count(), tokens=sum(toLong(gen_ai.usage.input_tokens)+toLong(gen_ai.usage.output_tokens)), sessions=countDistinct(gen_ai.conversation.id), by:{dev, user.team}\n| sort requests desc\n| limit 10",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| filter isNotNull(user.email)\n| summarize requests = count(), tokens = sum(toLong(input_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens) + toLong(output_tokens)), sessions = countDistinct(session.id), by: {dev = user.email, user.team}\n| sort tokens desc\n| limit 10",
       "visualization": "table",
       "visualizationSettings": {},
       "querySettings": {
@@ -619,7 +619,7 @@
     "71": {
       "title": "AVG Cache Read Tokens",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter isNotNull(gen_ai.usage.cache_read.input_tokens)\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| fieldsAdd cin=toDouble(gen_ai.usage.cache_read.input_tokens)\n| summarize avg_cache=avg(cin)",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| summarize avg_cache = avg(toDouble(cache_read_tokens))",
       "visualization": "singleValue",
       "visualizationSettings": {
         "singleValue": {
@@ -646,7 +646,7 @@
     "72": {
       "title": "Cache Hit",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter isNotNull(gen_ai.usage.cache_read.input_tokens)\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| fieldsAdd cin=toDouble(gen_ai.usage.cache_read.input_tokens), inp=toDouble(gen_ai.usage.input_tokens)\n| summarize cr=sum(cin), i=sum(inp)\n| fieldsAdd hit_pct=round(cr/i*100, decimals:2)",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| summarize cr = sum(toDouble(cache_read_tokens)), allin = sum(toDouble(input_tokens) + toDouble(cache_read_tokens) + toDouble(cache_creation_tokens))\n| fieldsAdd hit_pct = round(cr / allin * 100, decimals: 2)",
       "visualization": "singleValue",
       "visualizationSettings": {
         "singleValue": {
@@ -713,7 +713,7 @@
     "74": {
       "title": "Tokens em cache (total)",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter isNotNull(gen_ai.usage.cache_read.input_tokens)\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| summarize tokens=sum(toLong(gen_ai.usage.cache_read.input_tokens))",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| summarize tokens = sum(toLong(cache_read_tokens))",
       "visualization": "singleValue",
       "visualizationSettings": {
         "singleValue": {
@@ -789,7 +789,7 @@
     "Claude_cost": {
       "title": "Custo (USD)",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter contains(gen_ai.request.model,\"claude\") or contains(gen_ai.request.model,\"opus\") or contains(gen_ai.request.model,\"sonnet\") or contains(gen_ai.request.model,\"haiku\")\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| fieldsAdd inp=toDouble(gen_ai.usage.input_tokens), out=toDouble(gen_ai.usage.output_tokens)\n| fieldsAdd cost_usd=if(contains(gen_ai.request.model,\"opus\"),(inp*0.000015)+(out*0.000075),else:if(contains(gen_ai.request.model,\"sonnet\"),(inp*0.000003)+(out*0.000015),else:if(contains(gen_ai.request.model,\"haiku\"),(inp*0.0000008)+(out*0.000004),else:if(contains(gen_ai.request.model,\"mini\"),(inp*0.00000015)+(out*0.0000006),else:if(contains(gen_ai.request.model,\"gpt-4o\"),(inp*0.0000025)+(out*0.00001),else:if(contains(gen_ai.request.model,\"gemini\"),(inp*0.00000125)+(out*0.000005),else:(inp*0.000002)+(out*0.00001)))))))\n| summarize total=sum(cost_usd)",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| summarize total = sum(toDouble(cost_usd))",
       "visualization": "singleValue",
       "visualizationSettings": {
         "singleValue": {
@@ -856,7 +856,7 @@
     "Claude_tok": {
       "title": "Tokens",
       "type": "data",
-      "query": "fetch spans\n| filter contains(gen_ai.request.model, \"claude\") or contains(gen_ai.request.model, \"opus\") or contains(gen_ai.request.model, \"sonnet\") or contains(gen_ai.request.model, \"haiku\") or contains(gen_ai.request.model, \"fable\")\n| filter contains(gen_ai.request.model,\"claude\") or contains(gen_ai.request.model,\"opus\") or contains(gen_ai.request.model,\"sonnet\") or contains(gen_ai.request.model,\"haiku\")\n| filter in(gen_ai.provider.name, $Provider)\n| filter in(gen_ai.request.model, $Modelo)\n| summarize tokens=sum(toLong(gen_ai.usage.input_tokens)+toLong(gen_ai.usage.output_tokens))",
+      "query": "fetch logs\n| filter in(service.name, {\"claude-code\", \"claude-code-desktop\"}) and event.name == \"api_request\"\n| filter in(model, $Modelo)\n| summarize tokens = sum(toLong(input_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens) + toLong(output_tokens))",
       "visualization": "singleValue",
       "visualizationSettings": {
         "singleValue": {

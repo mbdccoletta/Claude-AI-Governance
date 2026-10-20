@@ -44,7 +44,7 @@ Se o tenant restringe leitura de logs por grupo IAM, confira que o grupo de quem
 
 ![Monitoramento configurado, interface em português](images/cowork/admin-monitoring-pt.png)
 
-Se o cliente também usa os add-ins de Office, clique em *Copy settings from Cowork* no bloco **Office Agents**.
+O bloco **Office Agents** (add-ins de Office) é documentado como só Enterprise, envia traces a partir do navegador e precisa de um collector com CORS; um endpoint direto do Dynatrace provavelmente falha. Não copie as configurações do Cowork para ele sem esse collector.
 
 O exportador acrescenta `/v1/logs` sozinho (validado em 2026-10-20). No campo de header, cole o token logo depois de `Api-Token ` e confira que ele começa com **um único** `dt0c01.`: prefixo duplicado dá 401 e nada chega, sem erro visível no console. Não habilite captura de conteúdo para a validação: tokens, modelo, custo e e-mail já vêm por padrão. Para garantir que nenhum build antigo do Desktop envie conteúdo, o admin pode definir a device policy `otlpContentCapture` como `[]`.
 

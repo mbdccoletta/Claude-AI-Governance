@@ -118,6 +118,25 @@ def main():
     a = attrs(chat[0]) if chat else {}
     check(len(chat) == 1 and "gen_ai.usage.input_tokens" not in a, "no human prompt in transcript: span carries no token counts")
 
+    # --- one API response split into several transcript lines (one per content block) repeats its usage:
+    # the hook must count each message.id once, using the final (highest) output_tokens
+    SPANS.clear()
+    tr4 = pathlib.Path(home) / "blocks.jsonl"
+    rows = [{"type": "user", "message": {"role": "user", "content": "go"}}]
+    for mid, blocks, final_out in (("msg_A", 3, 40), ("msg_B", 2, 9)):
+        for b in range(blocks):
+            out = final_out if b == blocks - 1 else 1          # streaming placeholder on early blocks
+            rows.append({"type": "assistant", "costUSD": 0.5, "message": {"id": mid, "role": "assistant", "model": "claude-z",
+                         "usage": {"input_tokens": 10, "cache_read_input_tokens": 90, "output_tokens": out},
+                         "content": [{"type": "text", "text": f"{mid}-{b}"}]}})
+    tr4.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    run_hook(env, {"session_id": "blocks", "hook_event_name": "Stop", "transcript_path": str(tr4)}); time.sleep(0.5)
+    chat = [s for s in SPANS if s["name"].startswith("chat")]
+    a = attrs(chat[0]) if chat else {}
+    check(len(chat) == 1 and int(a.get("gen_ai.usage.input_tokens", -1)) == 200 and int(a.get("gen_ai.usage.output_tokens", -1)) == 49
+          and abs(float(a.get("gen_ai.usage.cost_usd", 0)) - 1.0) < 1e-9,
+          f"split responses counted once per message.id (in={a.get('gen_ai.usage.input_tokens')}, out={a.get('gen_ai.usage.output_tokens')}, cost={a.get('gen_ai.usage.cost_usd')})")
+
     # dead collector must not block
     (claude / "otel-attrs.json").write_text(json.dumps({"_collector_port": 1, "_capture_prompts": "false"}))
     t0 = time.time(); run_hook(env, {"session_id": "x", "hook_event_name": "UserPromptSubmit", "prompt": "p", "transcript_path": str(tr)}); run_hook(env, {"session_id": "x", "hook_event_name": "Stop", "transcript_path": str(tr)})

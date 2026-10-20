@@ -26,9 +26,10 @@
 #                              (env block in ~/.claude/settings.json)
 #   --enable-evals             check Node.js >= 20 and print how to score the captured
 #                              prompts with Dynatrace Evals (dt-evals); nothing is run
-#   --otelcol-version X.Y.Z    pin the collector release (default: latest)
+#   --otelcol-version X.Y.Z    collector release (default: 0.163.1, tested; 'latest' to fetch the newest)
 #   --otelcol-tarball PATH     use a local release tarball instead of downloading
-#   --quiet-collector          no debug exporter (smaller collector log)
+#   --verbose-collector        enable the collector debug exporter (writes every record, prompts
+#                              included, to logs/collector.log; off by default)
 #   --non-interactive          never prompt; fail on missing values
 #   -h, --help
 #
@@ -55,16 +56,15 @@ ENVIRONMENT="demo"
 EXTRA_ATTRS=()
 COLLECTOR_PORT=""
 HEALTH_PORT=""
-GRPC_PORT=4317
 CAPTURE_PROMPTS=0
 NATIVE_OTEL=0
 ENABLE_EVALS=0
-OTELCOL_VERSION="${DT_AI_OBS_OTELCOL_VERSION:-}"
+OTELCOL_VERSION="${DT_AI_OBS_OTELCOL_VERSION:-0.163.1}"   # pinned; pass --otelcol-version latest to opt out
 OTELCOL_TARBALL=""
-QUIET_COLLECTOR=0
+QUIET_COLLECTOR=1   # debug exporter off by default (it writes every record, incl. prompts, to collector.log)
 NON_INTERACTIVE=0
 
-usage() { sed -n '2,38p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { awk 'NR>1 && !/^#/ {exit} NR>1 {sub(/^# ?/, ""); print}' "${BASH_SOURCE[0]}"; }
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -86,6 +86,7 @@ while [ $# -gt 0 ]; do
     --otelcol-tarball) OTELCOL_TARBALL="$2"; shift 2 ;;
     --enable-evals) ENABLE_EVALS=1; shift ;;
     --quiet-collector) QUIET_COLLECTOR=1; shift ;;
+    --verbose-collector) QUIET_COLLECTOR=0; shift ;;
     --non-interactive) NON_INTERACTIVE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
@@ -142,6 +143,16 @@ ENDPOINT="${ENDPOINT%/v1/traces}"; ENDPOINT="${ENDPOINT%/v1/metrics}"; ENDPOINT=
 
 prompt TOKEN "Dynatrace API token (openTelemetryTrace.ingest + metrics.ingest + logs.ingest)" "" secret
 [ -n "$TOKEN" ] || die "token is required"
+TOKEN="$(printf '%s' "$TOKEN" | tr -d '[:space:]')"
+[[ "$TOKEN" =~ ^dt0c01\.[A-Za-z0-9]{24}\.[A-Za-z0-9]{64}$ ]] || die "token format invalid: expected dt0c01.<24 chars>.<64 chars> (96 chars, got ${#TOKEN}); a token pasted twice into the hidden prompt is the usual cause"
+CURL_TLS=(); [[ "$ENDPOINT" == https://* ]] && CURL_TLS=(--proto '=https' --tlsv1.2)
+code="$(curl -sS "${CURL_TLS[@]+"${CURL_TLS[@]}"}" -o /dev/null -w '%{http_code}' -m 20 -X POST "$ENDPOINT/v1/traces" -H "Authorization: Api-Token $TOKEN" -H 'Content-Type: application/x-protobuf' --data-binary '' 2>/dev/null || echo 000)"
+case "$code" in
+  200|400) log "Token accepted by $ENDPOINT (pre-flight HTTP $code)" ;;
+  401|403) die "the tenant rejected the token (HTTP $code): check the token value and its scopes (openTelemetryTrace.ingest, metrics.ingest, logs.ingest)" ;;
+  000) warn "could not reach $ENDPOINT for the token pre-flight (offline or blocked); continuing" ;;
+  *) warn "unexpected pre-flight response HTTP $code from $ENDPOINT; continuing" ;;
+esac
 DEFAULT_EMAIL="${CLAUDE_CODE_USER_EMAIL:-$(git config --global user.email 2>/dev/null || true)}"
 prompt EMAIL "Developer e-mail (user.email)" "$DEFAULT_EMAIL"
 if [ "$NON_INTERACTIVE" = 0 ]; then
@@ -159,7 +170,10 @@ if [ "$OS" = darwin ]; then
 elif command -v systemctl >/dev/null 2>&1; then
   systemctl --user stop "$SYSTEMD_UNIT" >/dev/null 2>&1 && log "Stopped the previous collector service (re-install)" || true
 fi
-pkill -f "$INSTALL_DIR/bin/otelcol-contrib" 2>/dev/null && sleep 1 || true
+pkill -f "$INSTALL_DIR/bin/otelcol-contrib" 2>/dev/null || true
+# bootout/stop return before the process exits: wait (≤5 s) until the previous collector is gone, otherwise
+# its ports would still read as busy and this install would silently move to the next free port
+for _i in $(seq 1 10); do pgrep -f "$INSTALL_DIR/bin/otelcol-contrib" >/dev/null 2>&1 || break; sleep 0.5; done
 
 # ── ports ───────────────────────────────────────────────────────────────────
 port_free() { python3 - "$1" <<'PY'
@@ -178,6 +192,12 @@ pick_port() { # pick_port START
 }
 existing_health() { curl -fs --max-time 1 "http://127.0.0.1:${1}" 2>/dev/null | grep -q 'Server available'; }
 
+# a previous install's ports are reused when not given explicitly (so settings.json / otel-attrs.json keep pointing at the same port)
+if [ -f "$INSTALL_DIR/config.env" ]; then
+  _prev_port="$(sed -n 's/^COLLECTOR_PORT=//p' "$INSTALL_DIR/config.env" | tr -dc 0-9)"; _prev_health="$(sed -n 's/^HEALTH_PORT=//p' "$INSTALL_DIR/config.env" | tr -dc 0-9)"
+  if [ -z "$COLLECTOR_PORT" ] && [ -n "$_prev_port" ] && [ "$_prev_port" != 4318 ] && port_free "$_prev_port"; then COLLECTOR_PORT="$_prev_port"; fi
+  if [ -z "$HEALTH_PORT" ] && [ -n "$_prev_health" ] && [ "$_prev_health" != 13133 ] && port_free "$_prev_health"; then HEALTH_PORT="$_prev_health"; fi
+fi
 if [ -z "$COLLECTOR_PORT" ]; then
   COLLECTOR_PORT=4318
   if ! port_free "$COLLECTOR_PORT"; then
@@ -193,7 +213,6 @@ if [ -z "$HEALTH_PORT" ]; then
   HEALTH_PORT=13133
   port_free "$HEALTH_PORT" || { HEALTH_PORT="$(pick_port 13134)"; warn "port 13133 is busy — health check on $HEALTH_PORT"; }
 fi
-port_free "$GRPC_PORT" || { GRPC_PORT="$(pick_port 4320)"; warn "port 4317 is busy — OTLP/gRPC on $GRPC_PORT"; }
 
 # ── 1. Claude Code hook ─────────────────────────────────────────────────────
 log "Installing Claude Code hook → $HOOK_DST"
@@ -210,9 +229,11 @@ python3 -I "$ASSET_DIR/hooks/configure-hooks.py" write-attrs --port "$COLLECTOR_
 
 # ── 3. collector binary ─────────────────────────────────────────────────────
 mkdir -p "$INSTALL_DIR/bin" "$INSTALL_DIR/logs"
+chmod 0700 "$INSTALL_DIR" "$INSTALL_DIR/logs"
+touch "$INSTALL_DIR/logs/collector.log"; chmod 0600 "$INSTALL_DIR/logs/collector.log"
 BIN="$INSTALL_DIR/bin/otelcol-contrib"
 fetch_latest_version() {
-  curl -fsSL -H "User-Agent: $UA" "$RELEASES_API" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))'
+  curl -fsSL --proto '=https' --tlsv1.2 -H "User-Agent: $UA" "$RELEASES_API" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))'
 }
 verify_sha256() { # verify_sha256 FILE SHAFILE
   local want have
@@ -229,13 +250,14 @@ if [ -n "$OTELCOL_TARBALL" ]; then
 elif [ -x "$BIN" ] && { [ -z "$OTELCOL_VERSION" ] || [ "$(cat "$INSTALL_DIR/otelcol-version.txt" 2>/dev/null)" = "$OTELCOL_VERSION" ]; }; then
   log "Collector binary already present ($(cat "$INSTALL_DIR/otelcol-version.txt" 2>/dev/null || echo unknown version)) — skipping download"
 else
-  [ -n "$OTELCOL_VERSION" ] || { log "Looking up the latest otelcol-contrib release"; OTELCOL_VERSION="$(fetch_latest_version)"; }
+  if [ -z "$OTELCOL_VERSION" ] || [ "$OTELCOL_VERSION" = latest ]; then log "Looking up the latest otelcol-contrib release"; OTELCOL_VERSION="$(fetch_latest_version)"; fi
+  [[ "$OTELCOL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "invalid collector version '$OTELCOL_VERSION' (expected X.Y.Z)"
   FILE="otelcol-contrib_${OTELCOL_VERSION}_${OS}_${ARCH}.tar.gz"
   URL="https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTELCOL_VERSION}/${FILE}"
   TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
   log "Downloading $URL"
-  curl -fL --progress-bar -H "User-Agent: $UA" -o "$TMP/$FILE" "$URL"
-  curl -fsSL -H "User-Agent: $UA" -o "$TMP/$FILE.sha256" "$URL.sha256"
+  curl -fL --proto '=https' --tlsv1.2 --progress-bar -H "User-Agent: $UA" -o "$TMP/$FILE" "$URL"
+  curl -fsSL --proto '=https' --tlsv1.2 -H "User-Agent: $UA" -o "$TMP/$FILE.sha256" "$URL.sha256"
   verify_sha256 "$TMP/$FILE" "$TMP/$FILE.sha256"; log "checksum OK"
   tar -xzf "$TMP/$FILE" -C "$INSTALL_DIR/bin" otelcol-contrib
   echo "$OTELCOL_VERSION" > "$INSTALL_DIR/otelcol-version.txt"
@@ -246,6 +268,7 @@ log "Collector: $("$BIN" --version)"
 # ── 4. token → credential store ─────────────────────────────────────────────
 if [ "$OS" = darwin ]; then
   log "Storing the token in the macOS Keychain (service: $KEYCHAIN_SERVICE)"
+  # note: `security` only accepts the secret as an argument; it is visible in `ps` for the milliseconds the call takes
   /usr/bin/security add-generic-password -a "$(id -un)" -s "$KEYCHAIN_SERVICE" -l "Dynatrace AI Observability (Claude) ingest token" -w "$TOKEN" -U >/dev/null
   TOKEN_BACKEND=keychain
 elif command -v secret-tool >/dev/null 2>&1 && printf '%s' "$TOKEN" | secret-tool store --label="Dynatrace AI Observability (Claude) ingest token" service "$KEYCHAIN_SERVICE" key ingest-token 2>/dev/null; then
@@ -261,22 +284,16 @@ unset TOKEN
 # ── 5. render config + wrapper ──────────────────────────────────────────────
 log "Rendering $INSTALL_DIR/otel-collector.yaml"
 RENDER_FLAGS=(--endpoint "$ENDPOINT" --email "$EMAIL" --environment "$ENVIRONMENT" --os-type "$OS_TYPE"
-              --collector-port "$COLLECTOR_PORT" --grpc-port "$GRPC_PORT" --health-port "$HEALTH_PORT")
+              --collector-port "$COLLECTOR_PORT" --health-port "$HEALTH_PORT")
 [ "$CAPTURE_PROMPTS" = 1 ] && RENDER_FLAGS+=(--capture-prompts)
 [ "$QUIET_COLLECTOR" = 1 ] && RENDER_FLAGS+=(--no-debug-exporter)
 python3 -I "$ASSET_DIR/collector/render-config.py" --template "$ASSET_DIR/collector/otel-collector.yaml" --out "$INSTALL_DIR/otel-collector.yaml" "${RENDER_FLAGS[@]}" "${ATTR_FLAGS[@]+"${ATTR_FLAGS[@]}"}"
 chmod 0600 "$INSTALL_DIR/otel-collector.yaml"
-cat > "$INSTALL_DIR/config.env" <<CFG
-# generated by dt-ai-observability-claude install.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)
-TOKEN_BACKEND=$TOKEN_BACKEND
-KEYCHAIN_SERVICE=$KEYCHAIN_SERVICE
-DT_OTLP_ENDPOINT=$ENDPOINT
-USER_EMAIL=$EMAIL
-COLLECTOR_PORT=$COLLECTOR_PORT
-GRPC_PORT=$GRPC_PORT
-HEALTH_PORT=$HEALTH_PORT
-CAPTURE_PROMPTS=$CAPTURE_PROMPTS
-CFG
+{
+  printf '# generated by dt-ai-observability-claude install.sh on %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'TOKEN_BACKEND=%q\nKEYCHAIN_SERVICE=%q\nDT_OTLP_ENDPOINT=%q\nUSER_EMAIL=%q\n' "$TOKEN_BACKEND" "$KEYCHAIN_SERVICE" "$ENDPOINT" "$EMAIL"
+  printf 'COLLECTOR_PORT=%q\nHEALTH_PORT=%q\nCAPTURE_PROMPTS=%q\n' "$COLLECTOR_PORT" "$HEALTH_PORT" "$CAPTURE_PROMPTS"
+} > "$INSTALL_DIR/config.env"
 chmod 0600 "$INSTALL_DIR/config.env"
 install -m 0755 "$ASSET_DIR/collector/run-collector.sh" "$INSTALL_DIR/run-collector.sh"
 DT_INGEST_TOKEN=placeholder "$BIN" validate --config "$INSTALL_DIR/otel-collector.yaml" || die "rendered collector config failed validation"
@@ -294,7 +311,8 @@ if [ "$OS" = darwin ]; then
   mkdir -p "$HOME/Library/LaunchAgents"
   sed "s|__DIR__|$INSTALL_DIR|g" "$ASSET_DIR/collector/com.dynatrace.dt-ai-obs-claude.plist" > "$PLIST"
   launchctl bootout "gui/$(id -u)/$LAUNCHD_LABEL" >/dev/null 2>&1 || true
-  launchctl bootstrap "gui/$(id -u)" "$PLIST"
+  for _try in 1 2 3; do launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null && break; sleep 1; done
+  launchctl print "gui/$(id -u)/$LAUNCHD_LABEL" >/dev/null 2>&1 || launchctl load -w "$PLIST" 2>/dev/null || die "could not register the launchd agent (see $PLIST)"
   launchctl kickstart -k "gui/$(id -u)/$LAUNCHD_LABEL" >/dev/null 2>&1 || true
   SERVICE_HINT="launchctl kickstart -k gui/$(id -u)/$LAUNCHD_LABEL   # restart
   launchctl bootout gui/$(id -u)/$LAUNCHD_LABEL        # stop"

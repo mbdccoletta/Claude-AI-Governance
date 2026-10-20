@@ -10,6 +10,8 @@
 set -euo pipefail
 ASSET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="${DT_AI_OBS_DIR:-$HOME/.dt-ai-obs}"
+case "$INSTALL_DIR" in ""|/|"$HOME"|"$HOME/") echo "refusing to operate on '$INSTALL_DIR'" >&2; exit 1 ;; esac
+[ -f "$INSTALL_DIR/config.env" ] || [ -d "$INSTALL_DIR/bin" ] || echo "warning: $INSTALL_DIR does not look like an install dir (no config.env/bin)" >&2
 CLAUDE_DIR="$HOME/.claude"
 KEYCHAIN_SERVICE="dt-ai-obs-claude"
 LAUNCHD_LABEL="com.dynatrace.dt-ai-obs-claude"

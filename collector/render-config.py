@@ -29,7 +29,7 @@ def main():
     p.add_argument("--environment", default="demo")
     p.add_argument("--os-type", default="")
     p.add_argument("--collector-port", type=int, default=4318)
-    p.add_argument("--grpc-port", type=int, default=4317)
+    p.add_argument("--grpc-port", type=int, default=0, help=argparse.SUPPRESS)  # deprecated, ignored (gRPC receiver removed in 1.0.1)
     p.add_argument("--health-port", type=int, default=13133)
     p.add_argument("--capture-prompts", action="store_true")
     p.add_argument("--no-debug-exporter", action="store_true",
@@ -47,7 +47,6 @@ def main():
         "DT_ENVIRONMENT": a.environment,
         "OS_TYPE": a.os_type,
         "COLLECTOR_PORT": str(a.collector_port),
-        "GRPC_PORT": str(a.grpc_port),
         "HEALTH_PORT": str(a.health_port),
     }
 

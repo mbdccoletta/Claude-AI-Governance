@@ -193,7 +193,7 @@ Invoke-WebRequest http://127.0.0.1:13133
 
 ```bash
 python3 hooks/configure-hooks.py status     # hooks, env nativo, otel-attrs.json
-tail -f ~/.dt-ai-obs/logs/collector.log     # uma linha "Traces"/"Metrics"/"Logs" por lote enviado
+tail -f ~/.dt-ai-obs/logs/collector.log     # erros de export; uma linha "Traces"/"Metrics"/"Logs" por lote só com --verbose-collector
 ```
 
 ### 2. Spans chegando no Dynatrace
@@ -327,7 +327,7 @@ Para ver por desenvolvedor/squad, faça join com os spans do hook por `trace_id`
 | `curl 127.0.0.1:13133` falha | Serviço parado | macOS: `launchctl print gui/$(id -u)/com.dynatrace.dt-ai-obs-claude`; Linux: `systemctl --user status dt-ai-obs-claude`; Windows: histórico da Tarefa Agendada. Leia `~/.dt-ai-obs/logs/collector.log` |
 | Instalador avisa que 4318/13133 estão ocupadas | Coletor da extensão VS Code (ou outro receiver) rodando | O hook segue a nova porta (`_collector_port`); ajuste `OTEL_EXPORTER_OTLP_ENDPOINT` para a telemetria nativa, ou pare o outro coletor e reinstale |
 | `Exporting failed` / 401 / 403 no log | Escopos do token ou host `.apps.` | Reinstale com token correto e endpoint `.live.` |
-| 401 no `collector.log` logo após instalar, com token novo e escopos certos | O prompt oculto (`read -s`) recebeu o token **duas vezes** ou com espaço (alguns terminais / gerenciadores de clipboard colam no Cmd-V *e* no Enter). O instalador só confere que o token não está vazio; uma checagem de formato está planejada | Confira o tamanho guardado — um token `dt0c01.` tem 96 caracteres (`dt0c01.` + 24 + `.` + 64): macOS `security find-generic-password -s dt-ai-obs-claude -w \| tr -d '\n' \| wc -c`; Linux `secret-tool lookup service dt-ai-obs-claude key ingest-token \| wc -c` ou `wc -c < ~/.dt-ai-obs/ingest-token`. Reinstale sem digitar: `DT_INGEST_TOKEN='dt0c01.…' ./install.sh --endpoint … --email … --non-interactive` |
+| 401 no `collector.log` logo após instalar, com token novo e escopos certos | O prompt oculto (`read -s`) recebeu o token **duas vezes** ou com espaço (alguns terminais / gerenciadores de clipboard colam no Cmd-V *e* no Enter). Desde a 1.0.1 o instalador rejeita o que não for `dt0c01.<24>.<64>` e faz um POST vazio de pré-voo em `/v1/traces` (401/403 abortam), então isto vale para instalações feitas com a 1.0.0 | Confira o tamanho guardado — um token `dt0c01.` tem 96 caracteres (`dt0c01.` + 24 + `.` + 64): macOS `security find-generic-password -s dt-ai-obs-claude -w \| tr -d '\n' \| wc -c`; Linux `secret-tool lookup service dt-ai-obs-claude key ingest-token \| wc -c` ou `wc -c < ~/.dt-ai-obs/ingest-token`. Reinstale sem digitar: `DT_INGEST_TOKEN='dt0c01.…' ./install.sh --endpoint … --email … --non-interactive` |
 | Dashboard com tiles vazios, mas `fetch spans` traz dados | A variável `Modelo` do *Developers AI Usage* tem uma lista padrão fixa de ids de modelo e todo tile filtra `in(gen_ai.request.model, $Modelo)`; se os spans trazem outro modelo (ex.: `claude-sonnet-4-5`) nada aparece até marcá-lo | Abra o filtro `Modelo` e marque seus modelos (a query da variável lista só os modelos vistos no período do dashboard). Idem para `Provider` se `gen_ai.system` mudar |
 | 400 em `/v1/metrics` | Temporalidade cumulativa | Garanta `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta` (managed settings vencem as do usuário) |
 | Spans chegam, métricas/logs não | Telemetria nativa desligada ou sessão antiga | `python3 hooks/configure-hooks.py status`; reinicie o Claude Code |

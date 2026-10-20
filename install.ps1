@@ -30,9 +30,10 @@ param(
     [switch]$CapturePrompts,
     [switch]$EnableNativeOtel,
     [switch]$EnableEvals,                           # print how to run Dynatrace Evals (dt-evals); nothing is run
-    [string]$OtelcolVersion = $env:DT_AI_OBS_OTELCOL_VERSION,
+    [string]$OtelcolVersion = $(if ($env:DT_AI_OBS_OTELCOL_VERSION) { $env:DT_AI_OBS_OTELCOL_VERSION } else { '0.163.1' }),   # pinned; pass 'latest' to opt out
     [string]$OtelcolTarball,
-    [switch]$QuietCollector,
+    [switch]$QuietCollector,                        # kept for compatibility (debug exporter is off by default)
+    [switch]$VerboseCollector,                      # enable the debug exporter (writes every record, prompts included, to collector.log)
     [switch]$NonInteractive
 )
 $ErrorActionPreference = 'Stop'
@@ -80,6 +81,25 @@ if ($Token) {
     $SecureToken = Read-Host 'Dynatrace API token (openTelemetryTrace.ingest + metrics.ingest + logs.ingest)' -AsSecureString
 }
 if ($SecureToken.Length -eq 0) { Die 'token is required' }
+# format check + pre-flight against the tenant (the plain value lives only inside this block)
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureToken)
+try {
+    $plain = ([Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) -replace '\s', '')
+    if ($plain -notmatch '^dt0c01\.[A-Za-z0-9]{24}\.[A-Za-z0-9]{64}$') { Die "token format invalid: expected dt0c01.<24 chars>.<64 chars> (96 chars, got $($plain.Length)); a token pasted twice is the usual cause" }
+    $SecureToken = ConvertTo-SecureString -String $plain -AsPlainText -Force
+    try {
+        $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "$Endpoint/v1/traces" -Headers @{ Authorization = "Api-Token $plain" } -ContentType 'application/x-protobuf' -Body ([byte[]]@()) -TimeoutSec 20
+        Log "Token accepted by $Endpoint (pre-flight HTTP $($r.StatusCode))"
+    } catch {
+        $code = try { [int]$_.Exception.Response.StatusCode } catch { 0 }
+        if ($code -in 401, 403) { Die "the tenant rejected the token (HTTP $code): check the token value and its scopes (openTelemetryTrace.ingest, metrics.ingest, logs.ingest)" }
+        elseif ($code -eq 400) { Log "Token accepted by $Endpoint (pre-flight HTTP 400 on empty body)" }
+        else { Warn "could not complete the token pre-flight against $Endpoint ($($_.Exception.Message)); continuing" }
+    }
+} finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    Remove-Variable plain -ErrorAction SilentlyContinue
+}
 if (-not $Email) {
     $default = if ($env:CLAUDE_CODE_USER_EMAIL) { $env:CLAUDE_CODE_USER_EMAIL } else { (& git config --global user.email 2>$null) }
     if ($NonInteractive) { $Email = $default } else { $v = Read-Host "Developer e-mail (user.email) [$default]"; $Email = if ($v) { $v } else { $default } }
@@ -99,6 +119,7 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
     Log 'Stopped the previous collector task (re-install)'
 }
 Get-Process otelcol-contrib -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $InstallDir 'bin\otelcol-contrib.exe') } | Stop-Process -Force -ErrorAction SilentlyContinue
+foreach ($i in 1..10) { if (-not (Get-Process otelcol-contrib -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $InstallDir 'bin\otelcol-contrib.exe') })) { break }; Start-Sleep -Milliseconds 500 }
 Start-Sleep -Milliseconds 800
 
 # ── ports ───────────────────────────────────────────────────────────────────
@@ -115,7 +136,6 @@ if ($CollectorPort -eq 0) {
     }
 }
 if ($HealthPort -eq 0) { $HealthPort = 13133; if (-not (Test-PortFree $HealthPort)) { $HealthPort = Find-Port 13134; Warn "port 13133 busy — health check on $HealthPort" } }
-$GrpcPort = 4317; if (-not (Test-PortFree $GrpcPort)) { $GrpcPort = Find-Port 4320; Warn "port 4317 busy — OTLP/gRPC on $GrpcPort" }
 
 # ── 1. hook ─────────────────────────────────────────────────────────────────
 Log "Installing Claude Code hook -> $HookDst"
@@ -150,10 +170,11 @@ if ($OtelcolTarball) {
 } elseif ((Test-Path $Bin) -and (-not $OtelcolVersion -or ((Get-Content $VersionFile -ErrorAction SilentlyContinue) -eq $OtelcolVersion))) {
     Log "Collector binary already present ($(Get-Content $VersionFile -ErrorAction SilentlyContinue)) — skipping download"
 } else {
-    if (-not $OtelcolVersion) {
+    if (-not $OtelcolVersion -or $OtelcolVersion -eq 'latest') {
         Log 'Looking up the latest otelcol-contrib release'
         $OtelcolVersion = (Invoke-RestMethod -Uri $ReleasesApi -Headers @{ 'User-Agent' = $UA }).tag_name.TrimStart('v')
     }
+    if ($OtelcolVersion -notmatch '^\d+\.\d+\.\d+$') { Die "invalid collector version '$OtelcolVersion' (expected X.Y.Z)" }
     $file = "otelcol-contrib_${OtelcolVersion}_windows_${arch}.tar.gz"
     $url  = "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v$OtelcolVersion/$file"
     $tmp  = Join-Path ([IO.Path]::GetTempPath()) "dt-ai-obs-$([guid]::NewGuid())"
@@ -185,9 +206,9 @@ Set-Acl (Join-Path $InstallDir 'ingest-token.dpapi') $acl
 Log "Rendering $InstallDir\otel-collector.yaml"
 $renderArgs = @('--template', (Join-Path $AssetDir 'collector\otel-collector.yaml'), '--out', (Join-Path $InstallDir 'otel-collector.yaml'),
                 '--endpoint', $Endpoint, '--email', "$Email", '--environment', $Environment, '--os-type', 'windows',
-                '--collector-port', $CollectorPort, '--grpc-port', $GrpcPort, '--health-port', $HealthPort)
+                '--collector-port', $CollectorPort, '--health-port', $HealthPort)
 if ($CapturePrompts) { $renderArgs += '--capture-prompts' }
-if ($QuietCollector) { $renderArgs += '--no-debug-exporter' }
+if (-not $VerboseCollector) { $renderArgs += '--no-debug-exporter' }
 & python -I (Join-Path $AssetDir 'collector\render-config.py') @renderArgs @attrArgs
 if ($LASTEXITCODE -ne 0) { Die 'config rendering failed' }
 @"
@@ -196,7 +217,6 @@ TOKEN_BACKEND=dpapi
 DT_OTLP_ENDPOINT=$Endpoint
 USER_EMAIL=$Email
 COLLECTOR_PORT=$CollectorPort
-GRPC_PORT=$GrpcPort
 HEALTH_PORT=$HealthPort
 CAPTURE_PROMPTS=$([int][bool]$CapturePrompts)
 "@ | Set-Content (Join-Path $InstallDir 'config.env')

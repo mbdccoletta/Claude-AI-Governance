@@ -59,7 +59,19 @@ def write_json(path, data, backup=True):
         bak = "%s.bak-%s" % (path, time.strftime("%Y%m%d-%H%M%S"))
         with open(path, encoding="utf-8") as src, open(bak, "w", encoding="utf-8") as dst:
             dst.write(src.read())
+        try:
+            os.chmod(bak, 0o600)   # settings.json may hold API keys in its env block
+        except OSError:
+            pass
         print("backup: %s" % bak)
+        # keep only the three most recent backups
+        import glob as _glob
+        olds = sorted(_glob.glob(path + ".bak-*"))[:-3]
+        for o in olds:
+            try:
+                os.remove(o)
+            except OSError:
+                pass
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -93,8 +105,18 @@ def cmd_install_hooks(a):
         groups = hooks.get(ev)
         if not isinstance(groups, list):
             groups = []
-        if any(group_is_ours(g) for g in groups):
-            print("%s: hook already present, left untouched" % ev)
+        ours = [g for g in groups if group_is_ours(g)]
+        if ours:
+            wanted_cmd = entry["hooks"][0]["command"]
+            stale = [g for g in ours if any(h.get("command") != wanted_cmd for h in g["hooks"])]
+            for g in stale:
+                g["hooks"] = [dict(h, command=wanted_cmd) for h in g["hooks"]]
+            if stale:
+                hooks[ev] = groups
+                changed = True
+                print("%s: hook command updated to the current path" % ev)
+            else:
+                print("%s: hook already present, left untouched" % ev)
             continue
         groups.append(entry)
         hooks[ev] = groups
@@ -163,7 +185,9 @@ def cmd_native_otel(a):
     changed = False
     if a.remove:
         for k, v in wanted.items():
-            if env.get(k) == v:
+            cur = str(env.get(k, ""))
+            ours = cur == v or (k == "OTEL_EXPORTER_OTLP_ENDPOINT" and re.match(r"^http://127\.0\.0\.1:\d+/?$", cur))
+            if k in env and ours:
                 env.pop(k)
                 changed = True
                 print("env.%s removed" % k)

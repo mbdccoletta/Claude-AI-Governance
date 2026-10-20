@@ -30,6 +30,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+import urllib.parse
 
 SCHEMA_EVENT_TYPE = "claude.usage.daily"
 SCHEMA_VERSION = "1.0"
@@ -151,18 +152,30 @@ def read_csv(path, date, org_id):
         return list(merged.values())
 
 
-def post_batch(url, token, batch):
+def post_batch(url, token, batch, retries=3):
     body = json.dumps(batch).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST", headers={
-        "Content-Type": "application/json; charset=utf-8",
-        "Authorization": f"Api-Token {token}",
-        "User-Agent": "dt-ai-observability-claude/1.0 (team csv importer)",
-    })
-    try:
-        with urllib.request.urlopen(req, timeout=60) as res:
-            return res.status, res.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")
+    if len(body) > 5 * 1024 * 1024:
+        raise SystemExit(f"batch too large ({len(body)} bytes > 5 MiB); lower --batch-size")
+    import time as _time
+    for attempt in range(retries + 1):
+        req = urllib.request.Request(url, data=body, method="POST", headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "Authorization": f"Api-Token {token}",
+            "User-Agent": "dt-ai-observability-claude/1.0 (team csv importer)",
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=60) as res:
+                return res.status, res.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            text = e.read().decode("utf-8", "replace")
+            if e.code in (429, 500, 502, 503, 504) and attempt < retries:
+                wait = min(30, 2 ** attempt * 2)
+                print(f"[team_csv] HTTP {e.code}, retrying in {wait}s", file=sys.stderr); _time.sleep(wait); continue
+            return e.code, text
+        except urllib.error.URLError as e:
+            if attempt < retries:
+                _time.sleep(2 ** attempt * 2); continue
+            raise SystemExit(f"ingest failed: {e}")
 
 
 def main():
@@ -175,10 +188,14 @@ def main():
     ap.add_argument("--batch-size", type=int, default=500)
     ap.add_argument("--token-env", default="DT_INGEST_TOKEN")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--allow-http", action="store_true", help="allow a plain http:// tenant URL (local tests only)")
     a = ap.parse_args()
 
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", a.date):
-        raise SystemExit("--date must be YYYY-MM-DD")
+    try:
+        import datetime as _dt
+        _dt.datetime.strptime(a.date, "%Y-%m-%d")
+    except ValueError:
+        raise SystemExit("--date must be a valid YYYY-MM-DD day")
 
     events = read_csv(a.csv, a.date, a.org_id)
     total_cost = round(sum(e["cost_usd"] for e in events), 2)
@@ -193,6 +210,9 @@ def main():
     token = os.environ.get(a.token_env)
     if not token:
         raise SystemExit(f"env var {a.token_env} is not set")
+    _host = urllib.parse.urlparse(a.tenant).hostname or ""
+    if not a.tenant.lower().startswith("https://") and not a.allow_http and _host not in ("127.0.0.1", "localhost", "::1"):
+        raise SystemExit("--tenant must be https:// (the token travels in a header); use --allow-http only against a local mock")
     url = a.tenant.rstrip("/") + a.endpoint
     sent = 0
     for i in range(0, len(events), a.batch_size):

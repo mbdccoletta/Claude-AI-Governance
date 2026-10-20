@@ -13,6 +13,24 @@
   harness tags (`<command-*>`, `<local-command-stdout>`, `<ide_*>`), unclosed blocks and repeated spaces.
 - New `test/hook_tests.py` (isolated HOME + loopback sink): concurrency, privacy gates, token sums, state hygiene, dead collector.
 
+### P3 · installer, collector and supply chain
+- Ingest token: whitespace stripped, format enforced (`dt0c01.<24>.<64>`) and an empty pre-flight POST to `<endpoint>/v1/traces`;
+  401/403 abort the install (a double paste into the hidden prompt used to be accepted and fail with 401 later). Both installers.
+- Collector debug exporter **off by default** (`--verbose-collector` / `-VerboseCollector` turns it on; `--quiet-collector` kept for
+  compatibility). `~/.dt-ai-obs` and `logs/` are 0700, `collector.log` 0600 and rotated at 50 MiB by the wrapper.
+- otelcol-contrib pinned to 0.163.1 by default (`--otelcol-version latest` opts out; versions validated as X.Y.Z), downloads with
+  `--proto '=https' --tlsv1.2`; `@dynatrace-oss/dt-evals` pinned to 0.3.3-alpha (`DT_EVALS_VERSION` overrides).
+- gRPC receiver (4317) removed: nothing used it. `memory_limiter` first in every pipeline (256 MiB / 64 MiB spike).
+- Missing or empty token no longer restart-loops the service: the wrapper sleeps 5 min before exit 78 and systemd has
+  `RestartPreventExitStatus=78`. `run-collector.ps1` runs the collector with `$ErrorActionPreference='Continue'` so the first stderr
+  line no longer kills the wrapper on PowerShell 5.1.
+- `configure-hooks.py`: an already-installed hook whose path changed is updated; native env block removed by our own value pattern,
+  not only the exact value; `settings.json` backups are 0600 and only the last three are kept.
+- `config.env` written with shell quoting; `uninstall.sh` / `.ps1` refuse `/`, `$HOME` or an empty install dir; `launchctl bootstrap`
+  retried; `--help` prints the whole header (no fixed line range).
+- `import_team_spend.py`: `--tenant` must be https (loopback or `--allow-http` for mocks), retries 429/5xx with backoff, strict date check,
+  5 MiB batch guard.
+
 
 ## 1.0.0 — 2026-10-19
 

@@ -192,8 +192,8 @@ $env:DT_INGEST_TOKEN = 'dt0c01.XXXX'
 | `--capture-prompts` | `-CapturePrompts` | Send prompt / response content (default off) |
 | `--enable-native-otel` | `-EnableNativeOtel` | Add the Claude Code native OTel env block to `~/.claude/settings.json` (see [native telemetry](#native-telemetry)) |
 | `--enable-evals` | `-EnableEvals` | Check Node.js ≥ 20 and print how to run [Dynatrace Evals](#evals) on the captured prompts; nothing is executed |
-| `--otelcol-version`, `--otelcol-tarball` | `-OtelcolVersion`, `-OtelcolTarball` | Pin the collector release / install from a local tarball (offline) |
-| `--quiet-collector` | `-QuietCollector` | No debug exporter (smaller collector log) |
+| `--otelcol-version`, `--otelcol-tarball` | `-OtelcolVersion`, `-OtelcolTarball` | Collector release (default pinned to 0.163.1, the tested one; `latest` fetches the newest) / install from a local tarball (offline) |
+| `--verbose-collector` | `-VerboseCollector` | Enable the collector debug exporter: every record (prompts included when capture is on) is written to `~/.dt-ai-obs/logs/collector.log`. Off by default since 1.0.1 (`--quiet-collector` is still accepted) |
 | `--non-interactive` | `-NonInteractive` | Never prompt |
 
 Re-running the installer is safe: it updates the config, keeps existing hook entries, replaces the stored token and restarts the service.
@@ -215,7 +215,7 @@ Invoke-WebRequest http://127.0.0.1:13133
 
 ```bash
 python3 hooks/configure-hooks.py status      # hook entries, native OTel env, otel-attrs.json
-tail -f ~/.dt-ai-obs/logs/collector.log      # one "Traces"/"Metrics"/"Logs" line per batch
+tail -f ~/.dt-ai-obs/logs/collector.log      # export errors; one "Traces"/"Metrics"/"Logs" line per batch only with --verbose-collector
 ```
 
 Then type a prompt in a Claude Code session and run the health-check query in [docs/dql-examples.md](docs/dql-examples.md#health-check-is-data-arriving) after 1–2 minutes.
@@ -417,7 +417,7 @@ Service control:
 | `curl 127.0.0.1:13133` fails | Service not running | macOS: `launchctl print gui/$(id -u)/com.dynatrace.dt-ai-obs-claude`; Linux: `systemctl --user status dt-ai-obs-claude`; Windows: Task Scheduler → task history. Then read `~/.dt-ai-obs/logs/collector.log` |
 | Installer says port 4318 / 13133 busy and picks another | The VS Code extension's collector (or another OTLP receiver) is running | Fine for the hook (it follows `_collector_port`), but update `OTEL_EXPORTER_OTLP_ENDPOINT` for native telemetry; or stop the other collector and re-run the installer |
 | `Exporting failed` / `401` / `403` in collector log | Wrong token scopes or `.apps.` host | Re-run the installer with a token that has `openTelemetryTrace.ingest`, `metrics.ingest`, `logs.ingest` and the `.live.` endpoint |
-| `401` in `collector.log` right after a fresh install, although the token is new and has the right scopes | The hidden `read -s` prompt received the token **twice** or with whitespace (some terminals / clipboard managers paste on Cmd-V *and* on Enter). The installer only checks that the token is non-empty; a format check is planned | Check the stored length — a `dt0c01.` token is 96 characters (`dt0c01.` + 24 + `.` + 64): macOS `security find-generic-password -s dt-ai-obs-claude -w \| tr -d '\n' \| wc -c`; Linux `secret-tool lookup service dt-ai-obs-claude key ingest-token \| wc -c` or `wc -c < ~/.dt-ai-obs/ingest-token`. Then re-run without typing it: `DT_INGEST_TOKEN='dt0c01.…' ./install.sh --endpoint … --email … --non-interactive` |
+| `401` in `collector.log` right after a fresh install, although the token is new and has the right scopes | The hidden `read -s` prompt received the token **twice** or with whitespace (some terminals / clipboard managers paste on Cmd-V *and* on Enter). Since 1.0.1 the installer rejects anything that is not `dt0c01.<24>.<64>` and sends an empty pre-flight POST to `/v1/traces` (401/403 abort the install), so this applies to installs made with 1.0.0 | Check the stored length — a `dt0c01.` token is 96 characters (`dt0c01.` + 24 + `.` + 64): macOS `security find-generic-password -s dt-ai-obs-claude -w \| tr -d '\n' \| wc -c`; Linux `secret-tool lookup service dt-ai-obs-claude key ingest-token \| wc -c` or `wc -c < ~/.dt-ai-obs/ingest-token`. Then re-run without typing it: `DT_INGEST_TOKEN='dt0c01.…' ./install.sh --endpoint … --email … --non-interactive` |
 | Dashboard tiles empty but `fetch spans` shows data | The `Modelo` variable of *Developers AI Usage* has a fixed default list of model ids and every tile filters `in(gen_ai.request.model, $Modelo)`; a tenant whose spans report another model (e.g. `claude-sonnet-4-5`) sees nothing until the model is ticked | Open the `Modelo` filter and select your models (the variable query lists only models seen in the dashboard timeframe). Same for `Provider` if `gen_ai.system` ever changes |
 | `400` on `/v1/metrics` | Cumulative temporality from a client | Make sure `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta` reaches Claude Code (managed settings win over user settings) |
 | Spans appear, metrics/logs don't | Native OTel not enabled, or the session predates the env change | `python3 hooks/configure-hooks.py status`; restart Claude Code |

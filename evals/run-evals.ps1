@@ -45,7 +45,7 @@ $EvalsDir   = $PSScriptRoot
 $InstallDir = if ($env:DT_AI_OBS_DIR) { $env:DT_AI_OBS_DIR } else { Join-Path $env:USERPROFILE '.dt-ai-obs' }
 $AttrsFile  = Join-Path $env:USERPROFILE '.claude\otel-attrs.json'
 $Pkg        = '@dynatrace-oss/dt-evals'
-$PkgVersion = if ($env:DT_EVALS_VERSION) { $env:DT_EVALS_VERSION } else { 'latest' }
+$PkgVersion = if ($env:DT_EVALS_VERSION) { $env:DT_EVALS_VERSION } else { '0.3.3-alpha' }   # pinned (npm latest on 2026-10-20)
 $AllMetrics = @('prompt-injection', 'output-prompt-injection', 'pii-leakage', 'toxicity', 'bias', 'hallucination',
                 'faithfulness', 'factual-accuracy', 'relevance', 'context-relevance', 'answer-completeness',
                 'conciseness', 'fluency', 'summarization-quality', 'user-frustration')

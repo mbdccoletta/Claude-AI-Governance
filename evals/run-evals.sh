@@ -49,7 +49,7 @@
 #
 # Environment: DT_API_TOKEN (platform token dt0s16… with the scopes below, or an
 # API token dt0c01…), the judge key (ANTHROPIC_API_KEY, OPENAI_API_KEY, …),
-# DT_EVALS_VERSION (npm version or tag, default latest), DT_EVALS_BIN (use an
+# DT_EVALS_VERSION (npm version or tag, default 0.3.3-alpha, pinned), DT_EVALS_BIN (use an
 # installed binary instead of npx). dt-evals also loads evals/.env automatically.
 #
 # Token scopes (platform token): storage:spans:read, storage:buckets:read,
@@ -62,7 +62,7 @@ ASSET_DIR="$(cd "$EVALS_DIR/.." && pwd)"
 INSTALL_DIR="${DT_AI_OBS_DIR:-$HOME/.dt-ai-obs}"
 ATTRS_FILE="$HOME/.claude/otel-attrs.json"
 PKG="@dynatrace-oss/dt-evals"
-DT_EVALS_VERSION="${DT_EVALS_VERSION:-latest}"
+DT_EVALS_VERSION="${DT_EVALS_VERSION:-0.3.3-alpha}"   # pinned (npm "latest" on 2026-10-20); override to upgrade
 ALL_METRICS="prompt-injection,output-prompt-injection,pii-leakage,toxicity,bias,hallucination,faithfulness,factual-accuracy,relevance,context-relevance,answer-completeness,conciseness,fluency,summarization-quality,user-frustration"
 
 CMD="run"

@@ -13,6 +13,7 @@ param([switch]$KeepHooks, [switch]$KeepBinary, [switch]$Yes)
 $ErrorActionPreference = 'Continue'
 $AssetDir   = $PSScriptRoot
 $InstallDir = if ($env:DT_AI_OBS_DIR) { $env:DT_AI_OBS_DIR } else { Join-Path $env:USERPROFILE '.dt-ai-obs' }
+if (-not $InstallDir -or $InstallDir.TrimEnd('\') -in @($env:USERPROFILE, $env:SystemDrive, '')) { throw "refusing to operate on '$InstallDir'" }
 $ClaudeDir  = Join-Path $env:USERPROFILE '.claude'
 $TaskName   = 'Dynatrace AI Observability (Claude) collector'
 function Log($m) { Write-Host "==> $m" -ForegroundColor Cyan }

@@ -18,10 +18,15 @@ receivers:
     protocols:
       http:
         endpoint: 127.0.0.1:${env:COLLECTOR_PORT}
-      grpc:
-        endpoint: 127.0.0.1:${env:GRPC_PORT}
+      # gRPC is intentionally not enabled: the hook and Claude Code's native
+      # exporter both use OTLP/HTTP, and every listening port is attack surface.
 
 processors:
+  # First in every pipeline: refuses data instead of growing without bound.
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 256
+    spike_limit_mib: 64
   batch:
     timeout: 5s
     send_batch_size: 512
@@ -108,13 +113,13 @@ service:
   pipelines:
     traces:
       receivers:  [otlp]
-      processors: [transform/genai_compat, transform/redact_content, batch, resource]
+      processors: [memory_limiter, transform/genai_compat, transform/redact_content, batch, resource]
       exporters:  [debug, otlp_http/dynatrace]
     metrics:
       receivers:  [otlp]
-      processors: [transform/native_email, cumulative_to_delta, batch, resource]
+      processors: [memory_limiter, transform/native_email, cumulative_to_delta, batch, resource]
       exporters:  [debug, otlp_http/dynatrace]
     logs:
       receivers:  [otlp]
-      processors: [transform/native_email, transform/redact_content, batch, resource]
+      processors: [memory_limiter, transform/native_email, transform/redact_content, batch, resource]
       exporters:  [debug, otlp_http/dynatrace]

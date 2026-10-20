@@ -8,6 +8,7 @@ Type=simple
 ExecStart=/bin/bash __DIR__/run-collector.sh
 Restart=always
 RestartSec=5
+RestartPreventExitStatus=78
 StandardOutput=append:__DIR__/logs/collector.log
 StandardError=append:__DIR__/logs/collector.log
 

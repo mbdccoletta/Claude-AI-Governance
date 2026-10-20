@@ -117,8 +117,8 @@ Q_FRESHNESS = """fetch bizevents, from: now() - 45d
     developers = countDistinct(user.email),
     records = count()
   }, by: {source}
-| fieldsAdd usage_day_lag = now() - latest_usage  // usage.date is a UTC yyyy-MM-dd string: never formatTimestamp() it (viewer timezone shifts the day)
-| fields source, latest_usage_day, usage_day_lag, data_refreshed_at, last_ingest, developers, records
+| fieldsAdd lag_hours = round(toDouble(now() - latest_usage) / 3600000000000.0, decimals: 1)  // hours since the latest usage timestamp; usage.date itself is a UTC yyyy-MM-dd string: never formatTimestamp() it
+| fields source, latest_usage_day, lag_hours, data_refreshed_at, last_ingest, developers, records
 | sort latest_usage_day desc"""
 
 # ---------------------------------------------------------------- JSON helpers
@@ -286,7 +286,7 @@ place("coverage_table", data_tile(
 place("freshness", data_tile(
     "Freshness per source", Q_FRESHNESS, "table",
     {"table": {"rowDensity": "condensed", "enableSparklines": False, "linewrapEnabled": False, "columnWidthStrategy": "content"},
-     "unitsOverrides": [unit("usage_day_lag", "time", "nanosecond", 0, delimiter=False), count("developers"), count("records")]},
+     "unitsOverrides": [unit("lag_hours", "time", "hour", 1, delimiter=False), count("developers"), count("records")]},
     description="latest usage.date, Anthropic data_refreshed_at watermark (Enterprise only) and last ingest per source — all deduped"), 0, 29, 13, 6)
 place("caveats", markdown(CAVEATS), 13, 29, 11, 6)
 

@@ -24,8 +24,11 @@ fetch bizevents, from: now() - 10d
         api_requests = count()
       }, by: {user.email, usage.date}
   ], on: {user.email, usage.date}, kind: outer, prefix: "obs."
+// outer join: a day seen only by layer 2 has the official side null — take day and e-mail from whichever side has them
+| fieldsAdd usage.date = coalesce(usage.date, obs.usage.date), user.email = coalesce(user.email, obs.user.email)
+| fieldsAdd official_tokens = coalesce(official_tokens, 0), official_cost_usd = coalesce(official_cost_usd, 0.0)
 | fieldsAdd observed_tokens = coalesce(obs.observed_tokens, 0), observed_cost_usd = coalesce(obs.observed_cost_usd, 0.0)
 | fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0)
-| fieldsAdd delta_usd = coalesce(official_cost_usd, 0.0) - observed_cost_usd
-| fields usage.date, user.email, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = obs.api_requests
+| fieldsAdd delta_usd = official_cost_usd - observed_cost_usd
+| fields usage.date, user.email, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = coalesce(obs.api_requests, 0)
 | sort usage.date desc, delta_usd desc

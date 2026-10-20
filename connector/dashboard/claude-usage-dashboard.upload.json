@@ -548,7 +548,7 @@
     "coverage_table": {
       "type": "data",
       "title": "Official vs observed per developer per day",
-      "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\" and product == \"claude_code\"  // layer 2 only sees Claude Code: compare like with like\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // drop the sample.csv demo rows\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\", timezone: \"UTC\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    official_tokens = sum(tokens.total),\n    official_cost_usd = sum(cost_usd)\n  }, by: {user.email, usage.date}\n| join [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\" and in(service.name, {\"claude-code\", \"claude-code-desktop\"})  // Claude Code OTel export only\n    | fieldsAdd usage.date = formatTimestamp(timestamp, format: \"yyyy-MM-dd\", timezone: \"UTC\")\n    | summarize {\n        observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)),\n        observed_cost_usd = sum(toDouble(cost_usd)),\n        api_requests = count()\n      }, by: {user.email, usage.date}\n  ], on: {user.email, usage.date}, kind: outer, prefix: \"obs.\"\n| fieldsAdd observed_tokens = coalesce(obs.observed_tokens, 0), observed_cost_usd = coalesce(obs.observed_cost_usd, 0.0)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0)\n| fieldsAdd delta_usd = coalesce(official_cost_usd, 0.0) - observed_cost_usd\n| fields usage.date, user.email, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = obs.api_requests\n| sort usage.date desc, delta_usd desc",
+      "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\" and product == \"claude_code\"  // layer 2 only sees Claude Code: compare like with like\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // drop the sample.csv demo rows\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\", timezone: \"UTC\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    official_tokens = sum(tokens.total),\n    official_cost_usd = sum(cost_usd)\n  }, by: {user.email, usage.date}\n| join [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\" and in(service.name, {\"claude-code\", \"claude-code-desktop\"})  // Claude Code OTel export only\n    | fieldsAdd usage.date = formatTimestamp(timestamp, format: \"yyyy-MM-dd\", timezone: \"UTC\")\n    | summarize {\n        observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)),\n        observed_cost_usd = sum(toDouble(cost_usd)),\n        api_requests = count()\n      }, by: {user.email, usage.date}\n  ], on: {user.email, usage.date}, kind: outer, prefix: \"obs.\"\n| fieldsAdd usage.date = coalesce(usage.date, obs.usage.date), user.email = coalesce(user.email, obs.user.email)\n| fieldsAdd official_tokens = coalesce(official_tokens, 0), official_cost_usd = coalesce(official_cost_usd, 0.0)\n| fieldsAdd observed_tokens = coalesce(obs.observed_tokens, 0), observed_cost_usd = coalesce(obs.observed_cost_usd, 0.0)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0)\n| fieldsAdd delta_usd = official_cost_usd - observed_cost_usd\n| fields usage.date, user.email, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = coalesce(obs.api_requests, 0)\n| sort usage.date desc, delta_usd desc",
       "visualization": "table",
       "visualizationSettings": {
         "autoSelectVisualization": false,
@@ -656,7 +656,7 @@
     "freshness": {
       "type": "data",
       "title": "Freshness per source",
-      "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    latest_usage_day = max(usage.date),\n    latest_usage = max(toTimestamp(usage.timestamp)),\n    data_refreshed_at = max(toTimestamp(data.refreshed_at)),\n    last_ingest = max(timestamp),\n    developers = countDistinct(user.email),\n    records = count()\n  }, by: {source}\n| fieldsAdd usage_day_lag = now() - latest_usage  // usage.date is a UTC yyyy-MM-dd string: never formatTimestamp() it (viewer timezone shifts the day)\n| fields source, latest_usage_day, usage_day_lag, data_refreshed_at, last_ingest, developers, records\n| sort latest_usage_day desc",
+      "query": "fetch bizevents, from: now() - 45d\n| filter event.type == \"claude.usage.daily\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    latest_usage_day = max(usage.date),\n    latest_usage = max(toTimestamp(usage.timestamp)),\n    data_refreshed_at = max(toTimestamp(data.refreshed_at)),\n    last_ingest = max(timestamp),\n    developers = countDistinct(user.email),\n    records = count()\n  }, by: {source}\n| fieldsAdd lag_hours = round(toDouble(now() - latest_usage) / 3600000000000.0, decimals: 1)  // hours since the latest usage timestamp; usage.date itself is a UTC yyyy-MM-dd string: never formatTimestamp() it\n| fields source, latest_usage_day, lag_hours, data_refreshed_at, last_ingest, developers, records\n| sort latest_usage_day desc",
       "visualization": "table",
       "visualizationSettings": {
         "autoSelectVisualization": false,
@@ -668,11 +668,11 @@
         },
         "unitsOverrides": [
           {
-            "identifier": "usage_day_lag",
+            "identifier": "lag_hours",
             "unitCategory": "time",
-            "baseUnit": "nanosecond",
+            "baseUnit": "hour",
             "displayUnit": null,
-            "decimals": 0,
+            "decimals": 1,
             "suffix": "",
             "delimiter": false,
             "cascade": null,

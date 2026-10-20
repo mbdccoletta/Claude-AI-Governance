@@ -89,8 +89,11 @@ Record shape in Grail: `content` is the event name prefixed with `claude_code.`
 `claude_code.tool_decision`, `claude_code.hook_execution_complete`, …), `event.name` is the
 bare name, there is no `log.source`, and the resource attributes (`service.name`,
 `service.version`, `user.email`, `squad`, `cost_center`, …) are flattened onto the record.
-`service.name` is `claude-code-desktop` for the Desktop app (Claude Code 2.42+) and
-`claude-code` for the CLI and for older builds, so every query below accepts both.
+`service.name` is `claude-code-desktop` for the Desktop app (Claude Code 2.42+),
+`claude-code` for the CLI and for older builds, and `cowork` for Cowork sessions and unified
+chat exported by the claude.ai admin console ([Cowork telemetry](../README.md#cowork-telemetry));
+Cowork uses the same event names and fields, so the queries below accept all three and split
+by `service.name` where it matters. Cowork has no hook spans, so span queries stay Claude Code only.
 
 If these queries return nothing although the collector log shows `Logs` batches, run the
 [health check](#native-logs-health-check) first: the usual cause is that your user cannot
@@ -100,7 +103,7 @@ read the `default_logs` bucket, not that the data is missing.
 
 ```dql
 fetch logs, from:now()-24h
-| filter in(service.name, {"claude-code", "claude-code-desktop"}) and event.name == "api_request"
+| filter in(service.name, {"claude-code", "claude-code-desktop", "cowork"}) and event.name == "api_request"
 | summarize
     Requests        = count(),
     Input_Tokens    = sum(toLong(input_tokens)),
@@ -109,7 +112,7 @@ fetch logs, from:now()-24h
     Cache_Creation  = sum(toLong(cache_creation_tokens)),
     Cost_USD        = sum(toDouble(cost_usd)),
     Avg_Duration_ms = avg(toDouble(duration_ms)),
-  by: { Developer = `user.email`, Model = model }
+  by: { Developer = `user.email`, Model = model, Source = service.name }
 | sort Cost_USD desc
 ```
 
@@ -117,7 +120,7 @@ fetch logs, from:now()-24h
 
 ```dql
 fetch logs, from:now()-30d
-| filter in(service.name, {"claude-code", "claude-code-desktop"}) and event.name == "api_request"
+| filter in(service.name, {"claude-code", "claude-code-desktop", "cowork"}) and event.name == "api_request"
 | makeTimeseries Cost_USD = sum(toDouble(cost_usd)), by: { `user.email` }, interval: 1d
 ```
 
@@ -147,9 +150,22 @@ fetch logs, from:now()-24h
 
 ```dql
 fetch logs, from:now()-24h
-| filter in(service.name, {"claude-code", "claude-code-desktop"}) and event.name == "api_error"
-| summarize Errors = count(), by: { `user.email`, model, error }
+| filter in(service.name, {"claude-code", "claude-code-desktop", "cowork"}) and event.name == "api_error"
+| summarize Errors = count(), by: { `user.email`, model, error, Source = service.name }
 | sort Errors desc
+```
+
+### Cowork and unified chat: where the session ran
+
+`cowork.surface` tells cloud sessions (`remote`) from local Desktop ones; resource attributes set in the admin console (for example `claude.org`) arrive as plain attributes.
+
+```dql
+fetch logs, from:now()-7d
+| filter service.name == "cowork" and event.name == "api_request"
+| summarize Requests = count(), Cost_USD = sum(toDouble(cost_usd)),
+            Tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)),
+  by: { `user.email`, Surface = `cowork.surface`, model }
+| sort Cost_USD desc
 ```
 
 ## Native Claude Code metrics
@@ -222,9 +238,9 @@ fetch logs, from:now()-2h
 
 ```dql
 fetch logs, from:now()-1h
-| filter in(service.name, {"claude-code", "claude-code-desktop"}) or startsWith(content, "claude_code.")
+| filter in(service.name, {"claude-code", "claude-code-desktop", "cowork"}) or startsWith(content, "claude_code.")
 | summarize records = count(), events = collectDistinct(event.name), sessions = countDistinct(`session.id`),
-            devs = collectDistinct(`user.email`), models = collectDistinct(model)
+            devs = collectDistinct(`user.email`), models = collectDistinct(model), by: { service.name }
 ```
 
 If step 1 says `false`, fix it on the tenant side (one of):

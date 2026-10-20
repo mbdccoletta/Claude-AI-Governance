@@ -149,7 +149,7 @@ See `dql/`:
 | `cost-per-developer-30d.dql` | cost, tokens, requests, active days per developer, last 30 days |
 | `tokens-by-product-model.dql` | token mix (input/output/cache) and cost per product × model |
 | `top10-developers-by-cost.dql` | top 10 developers with product split |
-| `official-vs-observed-tokens.dql` | layer 3 official daily tokens (deduped, demo rows dropped, `product == "claude_code"` only) vs layer 2 real-time `event.name == "api_request"` logs from `service.name` `claude-code` / `claude-code-desktop`, per developer per day → coverage % and USD delta. Both sides use UTC days (`formatTimestamp(…, timezone: "UTC")`, matching `usage.date`) |
+| `official-vs-observed-tokens.dql` | layer 3 official daily tokens (deduped, demo rows dropped, products `claude_code` and `cowork`) vs layer 2 real-time `event.name == "api_request"` logs from `service.name` `claude-code` / `claude-code-desktop` (→ `claude_code`) and `cowork` (→ `cowork`), per developer, day and product → coverage % and USD delta. On Team plans a `cowork` row shows official = 0 (no API; the CSV is overage only). Both sides use UTC days (`formatTimestamp(…, timezone: "UTC")`, matching `usage.date`) |
 
 ## Dashboard
 

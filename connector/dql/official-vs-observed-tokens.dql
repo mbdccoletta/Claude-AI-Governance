@@ -1,34 +1,37 @@
-// Official daily tokens (layer 3, bizevents) vs real-time observed tokens (layer 2, Claude Code OTel logs,
-// event.name == "api_request") per developer per UTC day, last 7 days.
+// Official daily tokens (layer 3, bizevents) vs real-time observed tokens (layer 2 OTel logs, event.name == "api_request")
+// per developer, UTC day and product, last 7 days. Products compared: claude_code (service.name claude-code /
+// claude-code-desktop) and cowork (service.name cowork, the admin-configured Cowork export, which also carries unified chat).
 // Layer 2 attribute names follow the Claude Code OTel log export: user.email, model, input_tokens, output_tokens,
 // cache_read_tokens, cache_creation_tokens, cost_usd. Adjust the right side if layer 2 renames them.
 // usage.date is a UTC day: every formatTimestamp() here is pinned to timezone: "UTC" so the viewer's zone never shifts a day.
-// Expect observed <= official for claude_code: hooks only see sessions that ran on instrumented machines,
-// and the official number also covers claude.ai Claude Code on the web.
+// Expect observed <= official for claude_code: native OTel only sees sessions on instrumented machines, and the official
+// number also covers claude.ai Claude Code on the web. Cowork official rows exist only on Enterprise usage-based plans
+// (Team CSV = overage only), so a cowork row with official = 0 is normal on Team.
 fetch bizevents, from: now() - 10d
-| filter event.type == "claude.usage.daily" and product == "claude_code"  // layer 2 only sees Claude Code: compare like with like
+| filter event.type == "claude.usage.daily" and in(product, {"claude_code", "cowork"})  // the products layer 2 can see: compare like with like
 | filter coalesce(org.id, "") != "demo-sample"  // drop the sample.csv demo rows
 | filter usage.date >= formatTimestamp(now() - 7d, format: "yyyy-MM-dd", timezone: "UTC")
 | dedup dedup.key, sort: {timestamp desc}
 | summarize {
     official_tokens = sum(tokens.total),
     official_cost_usd = sum(cost_usd)
-  }, by: {user.email, usage.date}
+  }, by: {user.email, usage.date, product}
 | join [
     fetch logs, from: now() - 7d
-    | filter event.name == "api_request" and in(service.name, {"claude-code", "claude-code-desktop"})  // Claude Code OTel export only
-    | fieldsAdd usage.date = formatTimestamp(timestamp, format: "yyyy-MM-dd", timezone: "UTC")
+    | filter event.name == "api_request" and in(service.name, {"claude-code", "claude-code-desktop", "cowork"})  // Claude Code and Cowork OTel exports
+    | fieldsAdd usage.date = formatTimestamp(timestamp, format: "yyyy-MM-dd", timezone: "UTC"),
+                product = if(service.name == "cowork", "cowork", else: "claude_code")
     | summarize {
         observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)),
         observed_cost_usd = sum(toDouble(cost_usd)),
         api_requests = count()
-      }, by: {user.email, usage.date}
-  ], on: {user.email, usage.date}, kind: outer, prefix: "obs."
+      }, by: {user.email, usage.date, product}
+  ], on: {user.email, usage.date, product}, kind: outer, prefix: "obs."
 // outer join: a day seen only by layer 2 has the official side null — take day and e-mail from whichever side has them
-| fieldsAdd usage.date = coalesce(usage.date, obs.usage.date), user.email = coalesce(user.email, obs.user.email)
+| fieldsAdd usage.date = coalesce(usage.date, obs.usage.date), user.email = coalesce(user.email, obs.user.email), product = coalesce(product, obs.product)
 | fieldsAdd official_tokens = coalesce(official_tokens, 0), official_cost_usd = coalesce(official_cost_usd, 0.0)
 | fieldsAdd observed_tokens = coalesce(obs.observed_tokens, 0), observed_cost_usd = coalesce(obs.observed_cost_usd, 0.0)
 | fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0)
 | fieldsAdd delta_usd = official_cost_usd - observed_cost_usd
-| fields usage.date, user.email, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = coalesce(obs.api_requests, 0)
+| fields usage.date, user.email, product, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = coalesce(obs.api_requests, 0)
 | sort usage.date desc, delta_usd desc

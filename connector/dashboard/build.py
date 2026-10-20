@@ -89,16 +89,16 @@ Q_TOKENS_PRODUCT_MODEL = BASE_30D + """
 Q_COST_PER_DEV = dql_file("cost-per-developer-30d.dql")
 Q_OFFICIAL_VS_OBSERVED = dql_file("official-vs-observed-tokens.dql")
 
-# coverage KPI: observed (layer 2 logs) / official (layer 3) tokens, claude_code, last 7 usage days
+# coverage KPI: observed (layer 2 logs) / official (layer 3) tokens, claude_code + cowork, last 7 usage days
 Q_COVERAGE = """fetch bizevents, from: now() - 10d
-| filter event.type == "claude.usage.daily" and product == "claude_code"
+| filter event.type == "claude.usage.daily" and in(product, {"claude_code", "cowork"})
 | filter coalesce(org.id, "") != "demo-sample"  // demo rows loaded from csv-import/sample.csv
 | filter usage.date >= formatTimestamp(now() - 7d, format: "yyyy-MM-dd", timezone: "UTC")
 | dedup dedup.key, sort: {timestamp desc}
 | summarize official_tokens = sum(tokens.total)
 | append [
     fetch logs, from: now() - 7d
-    | filter event.name == "api_request" and in(service.name, {"claude-code", "claude-code-desktop"})
+    | filter event.name == "api_request" and in(service.name, {"claude-code", "claude-code-desktop", "cowork"})
     | summarize observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens))
   ]
 | summarize official_tokens = sum(official_tokens), observed_tokens = sum(observed_tokens)
@@ -272,15 +272,15 @@ place("tokens_product_model", data_tile(
     description="top 25 product × model pairs by tokens.total, last 30 usage days (connector/dql/tokens-by-product-model.dql)"), 12, 13, 12, 8)
 
 # row 4 — coverage: official (layer 3) vs observed (layer 2)
-place("coverage_hdr", markdown("### Coverage — official (layer 3 bizevents) vs observed (layer 2 Claude Code logs), claude_code, last 7 usage days"), 0, 21, 24, 1)
+place("coverage_hdr", markdown("### Coverage — official (layer 3 bizevents) vs observed (layer 2 Claude Code and Cowork logs), claude_code + cowork, last 7 usage days"), 0, 21, 24, 1)
 place("kpi_coverage", kpi("Observed / official tokens", Q_COVERAGE, "coverage_pct", "CheckmarkIcon", [pct("coverage_pct")], HIGHER_IS_BETTER,
-                          description="layer 2 api_request tokens ÷ layer 3 official claude_code tokens, last 7 usage days; red < 50 %, yellow < 80 %"), 0, 22, 6, 7)
+                          description="layer 2 api_request tokens ÷ layer 3 official claude_code + cowork tokens, last 7 usage days; red < 50 %, yellow < 80 %"), 0, 22, 6, 7)
 place("coverage_table", data_tile(
     "Official vs observed per developer per day", Q_OFFICIAL_VS_OBSERVED, "table",
     {"table": {"rowDensity": "condensed", "enableSparklines": False, "linewrapEnabled": False, "columnWidthStrategy": "content"},
      "unitsOverrides": [pct("coverage_pct"), usd("official_cost_usd"), usd("observed_cost_usd"), usd("delta_usd"),
                         count("official_tokens"), count("observed_tokens"), count("api_requests")]},
-    description="connector/dql/official-vs-observed-tokens.dql — outer join on {user.email, usage.date}; a developer with no layer 2 rows shows observed = 0"), 6, 22, 18, 7)
+    description="connector/dql/official-vs-observed-tokens.dql — outer join on {user.email, usage.date, product}; a developer with no layer 2 rows shows observed = 0"), 6, 22, 18, 7)
 
 # row 5 — freshness + caveats
 place("freshness", data_tile(
@@ -331,9 +331,9 @@ def check():
             errors.append(f"{tid}: filters on ingest timestamp instead of usage.date")
         if re.search(r'format: "yyyy-MM-dd"\)', q):
             errors.append(f"{tid}: formatTimestamp(..., format: \"yyyy-MM-dd\") without timezone: \"UTC\"")
-        if "fetch logs" in q and 'product == "claude_code"' not in q:
-            errors.append(f"{tid}: coverage query compares logs (Claude Code only) with all products")
-        if "fetch logs" in q and 'in(service.name, {"claude-code", "claude-code-desktop"})' not in q:
+        if "fetch logs" in q and 'in(product, {"claude_code", "cowork"})' not in q:
+            errors.append(f"{tid}: coverage query compares logs (Claude Code + Cowork) with all products")
+        if "fetch logs" in q and 'in(service.name, {"claude-code", "claude-code-desktop", "cowork"})' not in q:
             errors.append(f"{tid}: coverage query does not filter the logs side by service.name")
         vs = t["visualizationSettings"]
         rf = vs.get("singleValue", {}).get("recordField")

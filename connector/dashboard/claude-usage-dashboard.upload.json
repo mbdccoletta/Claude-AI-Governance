@@ -470,12 +470,12 @@
     "coverage_hdr": {
       "type": "markdown",
       "title": "",
-      "content": "### Coverage — official (layer 3 bizevents) vs observed (layer 2 Claude Code logs), claude_code, last 7 usage days"
+      "content": "### Coverage — official (layer 3 bizevents) vs observed (layer 2 Claude Code and Cowork logs), claude_code + cowork, last 7 usage days"
     },
     "kpi_coverage": {
       "type": "data",
       "title": "Observed / official tokens",
-      "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\" and product == \"claude_code\"\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\", timezone: \"UTC\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize official_tokens = sum(tokens.total)\n| append [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\" and in(service.name, {\"claude-code\", \"claude-code-desktop\"})\n    | summarize observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens))\n  ]\n| summarize official_tokens = sum(official_tokens), observed_tokens = sum(observed_tokens)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0.0)\n| fields coverage_pct",
+      "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\" and in(product, {\"claude_code\", \"cowork\"})\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // demo rows loaded from csv-import/sample.csv\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\", timezone: \"UTC\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize official_tokens = sum(tokens.total)\n| append [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\" and in(service.name, {\"claude-code\", \"claude-code-desktop\", \"cowork\"})\n    | summarize observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens))\n  ]\n| summarize official_tokens = sum(official_tokens), observed_tokens = sum(observed_tokens)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0.0)\n| fields coverage_pct",
       "visualization": "singleValue",
       "visualizationSettings": {
         "autoSelectVisualization": false,
@@ -543,12 +543,12 @@
           "isAvailable": true
         }
       },
-      "description": "layer 2 api_request tokens ÷ layer 3 official claude_code tokens, last 7 usage days; red < 50 %, yellow < 80 %"
+      "description": "layer 2 api_request tokens ÷ layer 3 official claude_code + cowork tokens, last 7 usage days; red < 50 %, yellow < 80 %"
     },
     "coverage_table": {
       "type": "data",
       "title": "Official vs observed per developer per day",
-      "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\" and product == \"claude_code\"  // layer 2 only sees Claude Code: compare like with like\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // drop the sample.csv demo rows\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\", timezone: \"UTC\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    official_tokens = sum(tokens.total),\n    official_cost_usd = sum(cost_usd)\n  }, by: {user.email, usage.date}\n| join [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\" and in(service.name, {\"claude-code\", \"claude-code-desktop\"})  // Claude Code OTel export only\n    | fieldsAdd usage.date = formatTimestamp(timestamp, format: \"yyyy-MM-dd\", timezone: \"UTC\")\n    | summarize {\n        observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)),\n        observed_cost_usd = sum(toDouble(cost_usd)),\n        api_requests = count()\n      }, by: {user.email, usage.date}\n  ], on: {user.email, usage.date}, kind: outer, prefix: \"obs.\"\n| fieldsAdd usage.date = coalesce(usage.date, obs.usage.date), user.email = coalesce(user.email, obs.user.email)\n| fieldsAdd official_tokens = coalesce(official_tokens, 0), official_cost_usd = coalesce(official_cost_usd, 0.0)\n| fieldsAdd observed_tokens = coalesce(obs.observed_tokens, 0), observed_cost_usd = coalesce(obs.observed_cost_usd, 0.0)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0)\n| fieldsAdd delta_usd = official_cost_usd - observed_cost_usd\n| fields usage.date, user.email, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = coalesce(obs.api_requests, 0)\n| sort usage.date desc, delta_usd desc",
+      "query": "fetch bizevents, from: now() - 10d\n| filter event.type == \"claude.usage.daily\" and in(product, {\"claude_code\", \"cowork\"})  // the products layer 2 can see: compare like with like\n| filter coalesce(org.id, \"\") != \"demo-sample\"  // drop the sample.csv demo rows\n| filter usage.date >= formatTimestamp(now() - 7d, format: \"yyyy-MM-dd\", timezone: \"UTC\")\n| dedup dedup.key, sort: {timestamp desc}\n| summarize {\n    official_tokens = sum(tokens.total),\n    official_cost_usd = sum(cost_usd)\n  }, by: {user.email, usage.date, product}\n| join [\n    fetch logs, from: now() - 7d\n    | filter event.name == \"api_request\" and in(service.name, {\"claude-code\", \"claude-code-desktop\", \"cowork\"})  // Claude Code and Cowork OTel exports\n    | fieldsAdd usage.date = formatTimestamp(timestamp, format: \"yyyy-MM-dd\", timezone: \"UTC\"),\n                product = if(service.name == \"cowork\", \"cowork\", else: \"claude_code\")\n    | summarize {\n        observed_tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)),\n        observed_cost_usd = sum(toDouble(cost_usd)),\n        api_requests = count()\n      }, by: {user.email, usage.date, product}\n  ], on: {user.email, usage.date, product}, kind: outer, prefix: \"obs.\"\n| fieldsAdd usage.date = coalesce(usage.date, obs.usage.date), user.email = coalesce(user.email, obs.user.email), product = coalesce(product, obs.product)\n| fieldsAdd official_tokens = coalesce(official_tokens, 0), official_cost_usd = coalesce(official_cost_usd, 0.0)\n| fieldsAdd observed_tokens = coalesce(obs.observed_tokens, 0), observed_cost_usd = coalesce(obs.observed_cost_usd, 0.0)\n| fieldsAdd coverage_pct = if(official_tokens > 0, observed_tokens * 100.0 / official_tokens, else: 0)\n| fieldsAdd delta_usd = official_cost_usd - observed_cost_usd\n| fields usage.date, user.email, product, official_tokens, observed_tokens, coverage_pct, official_cost_usd, observed_cost_usd, delta_usd, api_requests = coalesce(obs.api_requests, 0)\n| sort usage.date desc, delta_usd desc",
       "visualization": "table",
       "visualizationSettings": {
         "autoSelectVisualization": false,
@@ -651,7 +651,7 @@
           "isAvailable": true
         }
       },
-      "description": "connector/dql/official-vs-observed-tokens.dql — outer join on {user.email, usage.date}; a developer with no layer 2 rows shows observed = 0"
+      "description": "connector/dql/official-vs-observed-tokens.dql — outer join on {user.email, usage.date, product}; a developer with no layer 2 rows shows observed = 0"
     },
     "freshness": {
       "type": "data",

@@ -919,6 +919,189 @@
           "isAvailable": true
         }
       }
+    },
+    "cw0": {
+      "type": "markdown",
+      "title": "",
+      "content": "### 🤝 Cowork e chat unificado (claude.ai)\n> Eventos OTel que o console admin do claude.ai exporta (`service.name = cowork`): sessões Cowork no Desktop e na nuvem e, com *Chat and Cowork unified* ligado, as conversas do chat. Custo é o `cost_usd` reportado pela Anthropic. Esses tiles não usam os filtros Provider/Modelo, que leem spans."
+    },
+    "cw1": {
+      "title": "Custo Cowork (USD)",
+      "type": "data",
+      "query": "fetch logs\n| filter service.name == \"cowork\" and event.name == \"api_request\"\n| summarize total = sum(toDouble(cost_usd))",
+      "visualization": "singleValue",
+      "visualizationSettings": {
+        "singleValue": {
+          "labelMode": "none",
+          "isIconVisible": true,
+          "recordField": "total",
+          "prefixIcon": "MoneyIcon"
+        },
+        "autoSelectVisualization": false,
+        "unitsOverrides": [
+          {
+            "identifier": "total",
+            "unitCategory": "currency",
+            "baseUnit": "usd",
+            "displayUnit": null,
+            "decimals": 2,
+            "suffix": "",
+            "delimiter": true,
+            "cascade": null,
+            "added": 1
+          }
+        ]
+      },
+      "querySettings": {
+        "maxResultRecords": 1000,
+        "defaultScanLimitGbytes": 500,
+        "maxResultMegaBytes": 1,
+        "defaultSamplingRatio": 10,
+        "enableSampling": false
+      },
+      "davis": {
+        "davisVisualization": {
+          "isAvailable": true
+        }
+      }
+    },
+    "cw2": {
+      "title": "Requests Cowork",
+      "type": "data",
+      "query": "fetch logs\n| filter service.name == \"cowork\" and event.name == \"api_request\"\n| summarize total = count()",
+      "visualization": "singleValue",
+      "visualizationSettings": {
+        "singleValue": {
+          "labelMode": "none",
+          "isIconVisible": true,
+          "recordField": "total",
+          "prefixIcon": "AiIcon"
+        },
+        "autoSelectVisualization": false,
+        "unitsOverrides": []
+      },
+      "querySettings": {
+        "maxResultRecords": 1000,
+        "defaultScanLimitGbytes": 500,
+        "maxResultMegaBytes": 1,
+        "defaultSamplingRatio": 10,
+        "enableSampling": false
+      },
+      "davis": {
+        "davisVisualization": {
+          "isAvailable": true
+        }
+      }
+    },
+    "cw3": {
+      "title": "Devs ativos Cowork",
+      "type": "data",
+      "query": "fetch logs\n| filter service.name == \"cowork\" and event.name == \"api_request\"\n| summarize total = countDistinct(user.email)",
+      "visualization": "singleValue",
+      "visualizationSettings": {
+        "singleValue": {
+          "labelMode": "none",
+          "isIconVisible": true,
+          "recordField": "total",
+          "prefixIcon": "UserIcon"
+        },
+        "autoSelectVisualization": false,
+        "unitsOverrides": []
+      },
+      "querySettings": {
+        "maxResultRecords": 1000,
+        "defaultScanLimitGbytes": 500,
+        "maxResultMegaBytes": 1,
+        "defaultSamplingRatio": 10,
+        "enableSampling": false
+      },
+      "davis": {
+        "davisVisualization": {
+          "isAvailable": true
+        }
+      }
+    },
+    "cw4": {
+      "title": "Tokens Cowork",
+      "type": "data",
+      "query": "fetch logs\n| filter service.name == \"cowork\" and event.name == \"api_request\"\n| summarize total = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens))",
+      "visualization": "singleValue",
+      "visualizationSettings": {
+        "singleValue": {
+          "labelMode": "none",
+          "isIconVisible": true,
+          "recordField": "total",
+          "prefixIcon": "BubbleChartIcon"
+        },
+        "autoSelectVisualization": false,
+        "unitsOverrides": []
+      },
+      "querySettings": {
+        "maxResultRecords": 1000,
+        "defaultScanLimitGbytes": 500,
+        "maxResultMegaBytes": 1,
+        "defaultSamplingRatio": 10,
+        "enableSampling": false
+      },
+      "davis": {
+        "davisVisualization": {
+          "isAvailable": true
+        }
+      }
+    },
+    "cw5": {
+      "title": "Tokens Cowork ao longo do tempo por modelo",
+      "type": "data",
+      "query": "fetch logs\n| filter service.name == \"cowork\" and event.name == \"api_request\"\n| makeTimeseries tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)), by: {model}",
+      "visualization": "barChart",
+      "visualizationSettings": {
+        "autoSelectVisualization": false
+      },
+      "querySettings": {
+        "maxResultRecords": 1000,
+        "defaultScanLimitGbytes": 500,
+        "maxResultMegaBytes": 1,
+        "defaultSamplingRatio": 10,
+        "enableSampling": false
+      },
+      "davis": {
+        "davisVisualization": {
+          "isAvailable": true
+        }
+      }
+    },
+    "cw6": {
+      "title": "Top devs no Cowork por custo (USD)",
+      "type": "data",
+      "query": "fetch logs\n| filter service.name == \"cowork\" and event.name == \"api_request\"\n| summarize cost_usd = sum(toDouble(cost_usd)), tokens = sum(toLong(input_tokens) + toLong(output_tokens) + toLong(cache_read_tokens) + toLong(cache_creation_tokens)), requests = count(), by: {dev = user.email, surface = cowork.surface}\n| sort cost_usd desc\n| limit 20",
+      "visualization": "table",
+      "visualizationSettings": {
+        "unitsOverrides": [
+          {
+            "identifier": "cost_usd",
+            "unitCategory": "currency",
+            "baseUnit": "usd",
+            "displayUnit": null,
+            "decimals": 2,
+            "suffix": "",
+            "delimiter": true,
+            "cascade": null,
+            "added": 1
+          }
+        ]
+      },
+      "querySettings": {
+        "maxResultRecords": 1000,
+        "defaultScanLimitGbytes": 500,
+        "maxResultMegaBytes": 1,
+        "defaultSamplingRatio": 10,
+        "enableSampling": false
+      },
+      "davis": {
+        "davisVisualization": {
+          "isAvailable": true
+        }
+      }
     }
   },
   "layouts": {
@@ -1149,6 +1332,48 @@
       "y": 65,
       "w": 6,
       "h": 3
+    },
+    "cw0": {
+      "x": 0,
+      "y": 68,
+      "w": 24,
+      "h": 2
+    },
+    "cw1": {
+      "x": 0,
+      "y": 70,
+      "w": 6,
+      "h": 3
+    },
+    "cw2": {
+      "x": 6,
+      "y": 70,
+      "w": 6,
+      "h": 3
+    },
+    "cw3": {
+      "x": 12,
+      "y": 70,
+      "w": 6,
+      "h": 3
+    },
+    "cw4": {
+      "x": 18,
+      "y": 70,
+      "w": 6,
+      "h": 3
+    },
+    "cw5": {
+      "x": 0,
+      "y": 73,
+      "w": 12,
+      "h": 6
+    },
+    "cw6": {
+      "x": 12,
+      "y": 73,
+      "w": 12,
+      "h": 6
     }
   },
   "importedWithCode": false,
